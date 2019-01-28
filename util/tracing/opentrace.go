@@ -1,0 +1,217 @@
+package tracing
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"fmt"
+	"io"
+
+	"github.com/Axway/ace-golang-sdk/util/logging"
+	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
+	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
+	opentracingLog "github.com/opentracing/opentracing-go/log"
+	jaeger "github.com/uber/jaeger-client-go"
+	jaegerconfig "github.com/uber/jaeger-client-go/config"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+)
+
+const (
+	// OpentracingContext const
+	OpentracingContext string = "opentracingContext"
+)
+
+// set it via configuration
+var opentracingEnabled = true
+
+// TrLog - wrapper around file-based logger
+var trLog Tracer
+
+func init() {
+	//conventional logging is 'always on'
+	trLog = &TraceLog{
+		logger: logging.Logger(),
+	}
+}
+
+// InitTracing -
+func InitTracing(serviceDisplay string) TraceLogging {
+	if opentracingEnabled {
+		cfg := &jaegerconfig.Configuration{
+			Sampler: &jaegerconfig.SamplerConfig{
+				Type:  "const",
+				Param: 1,
+			},
+			Reporter: &jaegerconfig.ReporterConfig{
+				LogSpans: true,
+			},
+		}
+
+		tracer, closer, err := cfg.New(serviceDisplay, jaegerconfig.Logger(jaeger.StdLogger))
+		if err != nil {
+			panic(fmt.Sprintf("ERROR: cannot init Jaeger: %v\n", err))
+		}
+
+		opentracing.SetGlobalTracer(tracer)
+
+		return TraceLogging{
+			Closer: closer,
+		}
+	}
+
+	return TraceLogging{
+		Closer: noopCloser{},
+	}
+}
+
+// TraceToBase64 -
+func TraceToBase64(trace Tracer) (s string, ok bool) {
+	buff := new(bytes.Buffer)
+
+	switch t := trace.(type) {
+	case TraceSpan:
+		span := t.otSpan
+		ext.SpanKindRPCClient.Set(span)
+		span.Tracer().Inject(span.Context(), opentracing.Binary, buff)
+
+		result := base64.StdEncoding.EncodeToString(buff.Bytes())
+
+		return result, true
+	default:
+		return "", false
+	}
+}
+
+// Base64ToTrace -
+func Base64ToTrace(base64str, startSpanMsg string) (Tracer, error) {
+	otCtxBytes, err := base64.StdEncoding.DecodeString(base64str)
+	if err != nil {
+		return nil, err
+	}
+
+	tracer := opentracing.GlobalTracer()
+	buff := bytes.NewBuffer(otCtxBytes)
+	spanCtx, _ := tracer.Extract(opentracing.Binary, buff)
+	span := tracer.StartSpan(startSpanMsg, ext.RPCServerOption(spanCtx))
+
+	return TraceSpan{
+			otSpan:   span,
+			traceLog: trLog,
+		},
+		nil
+}
+
+// ContextWithSpan - return context based on type of trace
+func ContextWithSpan(ctx context.Context, trace Tracer) (context.Context, bool) {
+	switch t := trace.(type) {
+	case TraceSpan:
+		return opentracing.ContextWithSpan(ctx, t.otSpan), true
+	default:
+		return ctx, false
+	}
+}
+
+// StartTraceFromContext - return TraceSpan if opentracting is enabled else just TraceLog to log to file; if opentracing is enabled, we do both: opentracing and logging to file
+func StartTraceFromContext(ctx context.Context, msg string) (Tracer, context.Context) {
+	// is opentracing available/enabled? if so, return TraceSpan else a logger
+	if opentracingEnabled {
+		span, ctxWithSpan := opentracing.StartSpanFromContext(ctx, msg)
+
+		return TraceSpan{
+			otSpan:   span,
+			traceLog: trLog,
+		}, ctxWithSpan
+	}
+	return trLog, ctx
+}
+
+// TraceLogging -
+type TraceLogging struct {
+	Closer io.Closer
+}
+
+// Close -
+func (t TraceLogging) Close() {
+	t.Closer.Close()
+}
+
+//Tracer - an interface to be implemented by TraceSpan and TraceLog types
+type Tracer interface {
+	LogStringField(key, value string)
+	LogIntField(key string, value int)
+	Finish()
+}
+
+// TraceSpan - represents wrapper around opentracing
+type TraceSpan struct {
+	otSpan   opentracing.Span
+	traceLog Tracer
+}
+
+// TraceLog - represents wrapper around conventional logging which now is done using log golang package
+// PLEASE NOTE: if log.Logger is replaced by something which uses log levels, we will use INFO level, since it corresponds the closest to the purpose
+// of opentracing
+type TraceLog struct {
+	logger *zap.Logger
+}
+
+// Finish - TraceSpan implementation of Tracer interface
+func (s TraceSpan) Finish() {
+	s.otSpan.Finish()
+}
+
+// LogStringField -
+func (s TraceSpan) LogStringField(key, value string) {
+	s.otSpan.LogFields(
+		opentracingLog.String(key, value),
+	)
+	s.traceLog.LogStringField(key, value)
+}
+
+// LogIntField - TraceSpan implementation of Tracer interface method
+func (s TraceSpan) LogIntField(key string, value int) {
+	s.otSpan.LogFields(
+		opentracingLog.Int(key, value),
+	)
+	s.traceLog.LogIntField(key, value)
+}
+
+// LogStringField - TraceLog implementation of Tracer interface method
+func (l TraceLog) LogStringField(key, value string) {
+	l.logger.Info("tracing",
+		zap.String(key, value),
+	)
+}
+
+// LogIntField is TraceLog implementation of Tracer interface
+func (l TraceLog) LogIntField(key string, value int) {
+	l.logger.Info("tracing",
+		zap.Int(key, value),
+	)
+}
+
+// Finish - in case of TraceLog implementation, there is nothing to do
+func (l TraceLog) Finish() {
+	//noop
+}
+
+type noopCloser struct {
+}
+
+func (n noopCloser) Close() error {
+	return nil
+}
+
+// GetOpenTracingClientInterceptor -
+func GetOpenTracingClientInterceptor() grpc.UnaryClientInterceptor {
+	tracer := opentracing.GlobalTracer()
+	return otgrpc.OpenTracingClientInterceptor(tracer)
+}
+
+// GetOpenTracingServerInterceptor -
+func GetOpenTracingServerInterceptor() grpc.UnaryServerInterceptor {
+	tracer := opentracing.GlobalTracer()
+	return otgrpc.OpenTracingServerInterceptor(tracer)
+}
