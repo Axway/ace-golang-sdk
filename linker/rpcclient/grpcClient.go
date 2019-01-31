@@ -19,7 +19,7 @@ import (
 var log = logging.Logger()
 
 // ClientRegister makes a grpc call to Registration method on the server represented by host and port inputs
-func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) {
+func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (bool, error) {
 	hostInfo := fmt.Sprintf("%s:%d", host, port)
 	log.Info(fmt.Sprintf("calling Registration on: %s", hostInfo),
 		zap.String("event", "ClientRegister"),
@@ -37,7 +37,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) {
 		log.Error("cannot connect to registration server",
 			zap.String("error", err.Error()),
 		)
-		return
+		return false, err
 	}
 	defer conn.Close()
 
@@ -56,14 +56,16 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) {
 		log.Fatal("Error in client.Registration",
 			zap.String("error", err.Error()),
 		)
+		return false, err
 	}
 	log.Debug("received Receipt for registering",
 		zap.String("service.name", serviceInfo.ServiceName),
 	)
+	return true, nil
 }
 
 // ClientRelay makes a grpc call to Relay method on the server represented by host and port inputs
-func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, port uint16) {
+func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, port uint16) (bool, error) {
 	var hostInfo = fmt.Sprintf("%s:%d", host, port)
 
 	trace, _ := tracing.StartTraceFromContext(clientContext, "ClientRelay")
@@ -84,7 +86,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 			zap.String("host.info", hostInfo),
 			zap.String("error", err.Error()),
 		)
-		return
+		return false, err
 	}
 	defer conn.Close()
 
@@ -94,12 +96,11 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	defer cancel()
 
 	stream, err := client.Relay(ctx)
-
 	if err != nil {
 		log.Error("error attempting to open stream to client.Relay",
 			zap.String("error", err.Error()),
 		)
-		return
+		return false, err
 	}
 
 	waitc := make(chan struct{})
@@ -114,7 +115,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 			}
 			if err != nil {
 				log.Error("ClientRelay, error in stream.Recv",
-					zap.String("error", err.Error()),
+					zap.Error(err),
 				)
 				return
 			}
@@ -124,13 +125,13 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 	if err := stream.Send(msg); err != nil {
 		log.Error("error sending",
-			zap.String("error", err.Error()),
+			zap.Error(err),
 		)
-	} else {
-		log.Debug("sent message, closing stream",
-			zap.String("msg.UUID", msg.UUID),
-		)
+		return false, err
 	}
+	log.Debug("sent message, closing stream",
+		zap.String("msg.UUID", msg.UUID),
+	)
 	stream.CloseSend()
 	trace.Finish()
 
@@ -139,6 +140,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	<-waitc
 
 	log.Debug("exiting client relay")
+	return true, nil
 }
 
 // LinkerClientRelay -
