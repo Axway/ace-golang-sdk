@@ -140,7 +140,7 @@ func StartServer(host string, port uint16, server *Server) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		log.Fatal("Server failed to listen",
-			zap.String("error", err.Error()),
+			zap.Error(err),
 		)
 	}
 
@@ -154,7 +154,7 @@ func StartServer(host string, port uint16, server *Server) {
 
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatal("failed to serve",
-			zap.String("error", err.Error()),
+			zap.Error(err),
 		)
 	}
 }

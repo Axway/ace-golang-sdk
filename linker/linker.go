@@ -18,9 +18,9 @@ import (
 
 // AceLinkerConfig - represents configuration attributes for linker
 type AceLinkerConfig struct {
-	ServerHost         string `cfg:"SERVER_HOST" cfg_default:"127.0.0.1"`
+	ServerHost         string `cfg:"SERVER_HOST" cfg_default:"0.0.0.0"`
 	ServerPort         uint16 `cfg:"SERVER_PORT" cfg_default:"50006"`
-	SidecarHost        string `cfg:"SIDECAR_HOST" cfg_default:"127.0.0.1"`
+	SidecarHost        string `cfg:"SIDECAR_HOST" cfg_default:"0.0.0.0"`
 	SidecarPort        uint16 `cfg:"SIDECAR_PORT" cfg_default:"50005"`
 	ServiceName        string `cfg:"SERVICE_NAME"`
 	ServiceVersion     string `cfg:"SERVICE_VERSION"`
@@ -111,8 +111,8 @@ func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 	case BusinessMessageProcessor:
 		clientRelay, buildErr := rpcclient.BuildClientRelay(ctx, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
-			log.Fatal("linker.OnRelay unable to BuildClientRelay",
-				zap.String("error", buildErr.Error()),
+			log.Fatal("agent unable to BuildClientRelay",
+				zap.Error(buildErr),
 			)
 			return
 		}
@@ -120,10 +120,12 @@ func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 		if err == nil {
 			clientRelay.CloseSend(ctxWithSpan)
 		} else {
-			//TODO: can we cancel the whole thing?
+			log.Error("message processor error",
+				zap.Error(err),
+			)
 		}
 	default:
-		panic(fmt.Sprintf("MsgProcessor field of %s NewLink is not of expected BusinessMessageProcessor type, actual: %T\n",
+		panic(fmt.Sprintf("MsgProcessor of %s agent is not of expected BusinessMessageProcessor type, actual: %T\n",
 			link.name, msgProcessor))
 	}
 
@@ -134,6 +136,13 @@ func (link Link) OnSidecarRegistrationComplete(serviceInfo *rpc.ServiceInfo) err
 	log.Info("linker reports onRegistrationComplete of sidecar",
 		zap.String("sidecar ID", serviceInfo.GetServiceName()),
 	)
+
+	if ok, err := link.registerWithSidecar(); !ok {
+		log.Fatal("unable to register agent in response to sidecar registration",
+			zap.Error(err),
+		)
+		return err
+	}
 
 	return nil
 }
@@ -167,14 +176,11 @@ func (link Link) Start() {
 		close(waitc)
 	}()
 
-	serviceInfo := rpc.ServiceInfo{
-		ServiceName:        link.name,
-		ServiceVersion:     link.version,
-		ServiceDescription: link.description,
-		ServiceHost:        link.cfg.ServerHost,
-		ServicePort:        uint32(link.cfg.ServerPort),
+	if ok, err := link.registerWithSidecar(); !ok {
+		log.Fatal("unable to Start agent",
+			zap.Error(err),
+		)
 	}
-	rpcclient.ClientRegister(sidecarHost, sidecarPort, &serviceInfo)
 
 	<-waitc
 
@@ -186,4 +192,21 @@ const timeFormat = "15:04:05.9999"
 // in linker, onRelayComplete does not need to be different from onRelay
 func (link Link) onRelayComplete(ctx context.Context, msg *rpc.Message) {
 	link.OnRelay(ctx, msg)
+}
+
+func (link Link) registerWithSidecar() (bool, error) {
+	serviceInfo := rpc.ServiceInfo{
+		ServiceName:        link.name,
+		ServiceVersion:     link.version,
+		ServiceDescription: link.description,
+		ServiceHost:        link.cfg.ServerHost,
+		ServicePort:        uint32(link.cfg.ServerPort),
+	}
+	if ok, err := rpcclient.ClientRegister(sidecarHost, sidecarPort, &serviceInfo); !ok {
+		log.Error("ClientRegistration of agent error",
+			zap.Error(err),
+		)
+		return false, err
+	}
+	return true, nil
 }
