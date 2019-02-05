@@ -1,6 +1,6 @@
 # Description
 
-ACE SDK allowes developers to implement microservices that can be used as executable step in a choreography.
+ACE SDK allows developers to implement microservices that can be used as executable step in a choreography.
 
 # Service Implemenation using the SDK
 ## Implement the callback method
