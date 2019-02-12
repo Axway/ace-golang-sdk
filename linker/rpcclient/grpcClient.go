@@ -68,12 +68,15 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, port uint16) (bool, error) {
 	var hostInfo = fmt.Sprintf("%s:%d", host, port)
 
-	trace, _ := tracing.StartTraceFromContext(clientContext, "ClientRelay")
-	trace.LogStringField("event", "ClientRelay")
+	trace, _ := tracing.StartTraceFromContext(clientContext, "Sending")
+	trace.LogStringField("event", " sending message")
+	trace.LogStringField("msg.Parent_UUID", msg.Parent_UUID)
 	trace.LogStringField("msg.UUID", msg.UUID)
 
-	if spanAsBase64, ok := tracing.TraceToBase64(trace); ok {
+	if spanAsBase64, err := tracing.TraceToBase64(trace); err == nil {
 		msg.MetaData[tracing.OpentracingContext] = spanAsBase64
+	} else {
+		log.Error("error encoding tracing context", zap.Error(err))
 	}
 
 	opts := []grpc.DialOption{
@@ -214,18 +217,21 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 
 // Send -
 func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMessage) error {
-	traceSpan, _ := tracing.StartTraceFromContext(ctx, "LinkerClientRelay")
+	traceSpan, _ := tracing.StartTraceFromContext(ctx, "Sending")
 	defer traceSpan.Finish()
 
 	//combine with sourceMessage
 	msg := buildResult(lcr.sourceMessage, bm)
 
-	if b64, ok := tracing.TraceToBase64(traceSpan); ok {
+	if b64, err := tracing.TraceToBase64(traceSpan); err == nil {
 		msg.MetaData[tracing.OpentracingContext] = b64
+	} else {
+		log.Error("error encoding tracing context", zap.Error(err))
 	}
 
-	traceSpan.LogStringField("event", "LinkerClientRelay.Send")
-	traceSpan.LogStringField("Parent_UUID", msg.Parent_UUID)
+	traceSpan.LogStringField("event", "sending message")
+	traceSpan.LogStringField("message.Parent_UUID", msg.Parent_UUID)
+	traceSpan.LogStringField("message.UUID", msg.Parent_UUID)
 
 	if err := lcr.stream.Send(msg); err != nil {
 		log.Error("error sending",
@@ -238,19 +244,15 @@ func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMe
 }
 
 // CloseSend -
+//
 func (lcr *LinkerClientRelay) CloseSend(ctx context.Context) {
-	span, _ := tracing.StartTraceFromContext(ctx, "LinkerClientRelay")
-	span.LogStringField("event", "LinkerClientRelay.CloseSend")
-	span.Finish()
-
-	//TODO: is it better to use WaitGroup ?
 	waitc := make(chan struct{})
 	go func() {
-		log.Debug("LinkerClientRelay: openining stream to receive Relay receipt")
+		log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
 		for {
 			_, err := lcr.stream.Recv()
 			if err == io.EOF {
-				log.Debug("LinkerClientRelay, done receiving, EOF")
+				log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
 				close(waitc)
 				return
 			}

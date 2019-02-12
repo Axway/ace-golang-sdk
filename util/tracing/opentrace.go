@@ -1,9 +1,9 @@
 package tracing
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 
@@ -67,33 +67,40 @@ func InitTracing(serviceDisplay string) TraceLogging {
 }
 
 // TraceToBase64 -
-func TraceToBase64(trace Tracer) (s string, ok bool) {
-	buff := new(bytes.Buffer)
+func TraceToBase64(trace Tracer) (string, error) {
 
 	switch t := trace.(type) {
 	case TraceSpan:
 		span := t.otSpan
 		ext.SpanKindRPCClient.Set(span)
-		span.Tracer().Inject(span.Context(), opentracing.Binary, buff)
 
-		result := base64.StdEncoding.EncodeToString(buff.Bytes())
+		textCarrier := opentracing.TextMapCarrier{}
+		span.Tracer().Inject(span.Context(), opentracing.TextMap, textCarrier)
 
-		return result, true
+		var b []byte
+		var err error
+		if b, err = json.Marshal(textCarrier); err != nil {
+			t.LogStringField("Error", err.Error())
+			return "", err
+		}
+		result := base64.StdEncoding.EncodeToString(b)
+		return result, nil
 	default:
-		return "", false
+		return "", fmt.Errorf("unknown trace type: %v", t)
 	}
 }
 
 // Base64ToTrace -
 func Base64ToTrace(base64str, startSpanMsg string) (Tracer, error) {
-	otCtxBytes, err := base64.StdEncoding.DecodeString(base64str)
+	jsonB, err := base64.StdEncoding.DecodeString(base64str)
+	textCarrier := opentracing.TextMapCarrier{}
+	err = json.Unmarshal(jsonB, &textCarrier)
 	if err != nil {
 		return nil, err
 	}
 
 	tracer := opentracing.GlobalTracer()
-	buff := bytes.NewBuffer(otCtxBytes)
-	spanCtx, _ := tracer.Extract(opentracing.Binary, buff)
+	spanCtx, _ := tracer.Extract(opentracing.TextMap, textCarrier)
 	span := tracer.StartSpan(startSpanMsg, ext.RPCServerOption(spanCtx))
 
 	return TraceSpan{

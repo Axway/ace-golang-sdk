@@ -3,6 +3,7 @@ package linker
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -39,6 +40,8 @@ type Link struct {
 var link *Link
 var traceLogging tracing.TraceLogging
 var log = logging.Logger()
+var sidecarRegistrationTime time.Time
+var linkerRegistrationTime time.Time
 
 // MsgProducer - what is exposed to client business function
 type MsgProducer interface {
@@ -86,7 +89,7 @@ func Register(name, version, description string, fn BusinessMessageProcessor) (*
 		return nil, fmt.Errorf("Incomplete registration. Provide the business service callback method")
 	}
 
-	display := fmt.Sprintf("%s-%s (linker)", cfg.ServiceName, cfg.ServiceVersion)
+	display := fmt.Sprintf("%s-%s", cfg.ServiceName, cfg.ServiceVersion)
 	traceLogging = tracing.InitTracing(display)
 
 	return link, nil
@@ -102,11 +105,6 @@ var (
 func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 	util.Show("linker.onRelay msg:", aceMessage)
 
-	span, ctxWithSpan := tracing.StartTraceFromContext(ctx, fmt.Sprintf("(linker) %s", link.name))
-	span.LogStringField("event", "OnRelay")
-	span.LogStringField("msg.UUID", aceMessage.UUID)
-	span.Finish()
-
 	switch msgProcessor := link.MsgProcessor.(type) {
 	case BusinessMessageProcessor:
 		clientRelay, buildErr := rpcclient.BuildClientRelay(ctx, aceMessage, sidecarHost, sidecarPort)
@@ -116,10 +114,12 @@ func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 			)
 			return
 		}
-		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
-		if err == nil {
-			clientRelay.CloseSend(ctxWithSpan)
-		} else {
+		defer func() {
+			clientRelay.CloseSend(ctx)
+		}()
+		err := msgProcessor(ctx, aceMessage.GetBusinessMessage(), clientRelay)
+		//defer closeSend
+		if err != nil {
 			log.Error("message processor error",
 				zap.Error(err),
 			)
@@ -137,11 +137,35 @@ func (link Link) OnSidecarRegistrationComplete(serviceInfo *rpc.ServiceInfo) err
 		zap.String("sidecar ID", serviceInfo.GetServiceName()),
 	)
 
-	if ok, err := link.registerWithSidecar(); !ok {
-		log.Fatal("unable to register agent in response to sidecar registration",
-			zap.Error(err),
-		)
-		return err
+	firstRegistration := sidecarRegistrationTime.IsZero()
+
+	log.Debug("linker reports onRegistrationComplete of sidecar",
+		zap.Bool("is sidecar first registration", firstRegistration),
+		zap.Time("sidecar registration time", sidecarRegistrationTime),
+		zap.Time("linker registration time", linkerRegistrationTime),
+	)
+
+	sidecarRegistrationTime = time.Now()
+
+	log.Debug("linker reports onRegistrationComplete of sidecar",
+		zap.Time("new sidecar registration time", sidecarRegistrationTime),
+	)
+
+	if sidecarRegistrationTime.After(linkerRegistrationTime) && !firstRegistration {
+		log.Debug("linker reports onRegistrationComplete of sidecar",
+			zap.Bool("firstRegistration", firstRegistration),
+			zap.String("OnSidecarRegistrationComplete", "not an initial sidecar registration, it is AFTER linker, it needs to RENEW"))
+
+		if ok, err := link.registerWithSidecar(); !ok {
+			log.Fatal("unable to register agent in response to sidecar registration",
+				zap.Error(err),
+			)
+			return err
+		}
+	} else {
+		log.Debug("linker reports onRegistrationComplete of sidecar",
+			zap.Bool("firstRegistration", firstRegistration),
+			zap.String("OnSidecarRegistrationComplete", "no need to re-register linker"))
 	}
 
 	return nil
@@ -158,7 +182,7 @@ func (link Link) Start() {
 		OnRelay:                link.OnRelay,
 		OnRelayComplete:        link.onRelayComplete,
 		OnRegistrationComplete: link.OnSidecarRegistrationComplete,
-		Name:                   fmt.Sprintf("Linker: %s-%s", link.name, link.version),
+		Name:                   fmt.Sprintf("%s-%s", link.name, link.version),
 	}
 
 	log.Info("Starting linker and registering it with sidecar",
@@ -180,6 +204,8 @@ func (link Link) Start() {
 		log.Fatal("unable to Start agent",
 			zap.Error(err),
 		)
+	} else {
+		linkerRegistrationTime = time.Now()
 	}
 
 	<-waitc

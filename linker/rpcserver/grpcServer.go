@@ -72,11 +72,11 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 				zap.Uint64("msg.count", msgCount),
 			)
 			if last != nil {
-				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Server.Relay.EOF")
-				span.LogStringField("event", "Server.Relay.EOF")
-				span.LogStringField("ServiceName", s.Name)
+				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Receiving")
+				span.LogStringField("event", "end of message receive")
 				span.LogIntField("total message count", int(msgCount))
-				span.LogStringField("message.UUID", last.Parent_UUID)
+				span.LogStringField("message.UUID", last.UUID)
+				span.LogStringField("message.Parent_UUID", last.Parent_UUID)
 				span.Finish()
 
 				last.SequenceUpperBound = msgCount
@@ -111,14 +111,15 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 			msg.SequenceTerm = msgCount
 			log.Debug("Relay: received message",
 				zap.String("service.name", s.Name),
+				zap.String("msg.Parent_UUID", msg.Parent_UUID),
 				zap.String("msg.UUID", msg.UUID),
 				zap.Uint64("msg.count", msgCount),
 			)
 
 			if last != nil {
-				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Server.Relay")
-				span.LogStringField("ServiceName", s.Name)
-				span.LogStringField("message.Parent_UUID", last.GetParent_UUID())
+				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Receiving")
+				span.LogStringField("message.UUID", last.UUID)
+				span.LogStringField("message.Parent_UUID", last.Parent_UUID)
 				span.Finish()
 
 				s.OnRelay(ctxWithSpan, last)
