@@ -18,10 +18,10 @@ var log = logging.Logger()
 
 // OnRelayHandler defines what will be called in Relay method when payload is received; different implementation
 // is used by Linker and by Sidecar
-type OnRelayHandler func(ctx context.Context, msg *rpc.Message)
+type OnRelayHandler func(msg *rpc.Message)
 
 // OnRelayCompleteHandler -
-type OnRelayCompleteHandler func(ctx context.Context, msg *rpc.Message)
+type OnRelayCompleteHandler func(msg *rpc.Message)
 
 // OnRelayCompleteErrorHandler -
 type OnRelayCompleteErrorHandler func(*rpc.Message, error)
@@ -73,16 +73,8 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 				zap.Uint64("msg.count", msgCount),
 			)
 			if last != nil {
-				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Receiving")
-				span.LogStringField("event", "end of message receive")
-				span.LogIntField("total message count", int(msgCount))
-				span.LogStringField("message.UUID", last.UUID)
-				span.LogStringField("message.Parent_UUID", last.Parent_UUID)
-				span.Finish()
-
 				last.SequenceUpperBound = msgCount
-
-				s.OnRelayComplete(ctxWithSpan, last)
+				s.OnRelayComplete(last)
 			} else {
 				log.Fatal(fmt.Sprintf("Relay [%s]: at io.EOF, it is expected to have at least one message:%v\n", s.Name, last))
 			}
@@ -118,12 +110,7 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 			)
 
 			if last != nil {
-				span, ctxWithSpan := spanFromMetadataOrNew(last.GetMetaData(), "Receiving")
-				span.LogStringField("message.UUID", last.UUID)
-				span.LogStringField("message.Parent_UUID", last.Parent_UUID)
-				span.Finish()
-
-				s.OnRelay(ctxWithSpan, last)
+				s.OnRelay(last)
 			}
 			last = msg
 		}
@@ -169,17 +156,4 @@ func StartServer(host string, port uint16, server *Server) {
 	} else {
 		log.Info("server stopped")
 	}
-}
-
-func spanFromMetadataOrNew(msgMetadata map[string]string, msg string) (tracing.Tracer, context.Context) {
-	var span tracing.Tracer
-	var ctxWithSpan context.Context
-	otSpan, ok := msgMetadata[tracing.OpentracingContext]
-	if ok {
-		span, _ = tracing.Base64ToTrace(otSpan, msg)
-		ctxWithSpan, _ = tracing.ContextWithSpan(context.Background(), span)
-	} else {
-		span, ctxWithSpan = tracing.StartTraceFromContext(context.Background(), msg)
-	}
-	return span, ctxWithSpan
 }

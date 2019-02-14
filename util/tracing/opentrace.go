@@ -110,6 +110,28 @@ func Base64ToTrace(base64str, startSpanMsg string) (Tracer, error) {
 		nil
 }
 
+// ContextWithSpanToBase64 - base64 is encoding applied to SpanContext
+func ContextWithSpanToBase64(ctx context.Context) (string, error) {
+	span := opentracing.SpanFromContext(ctx)
+	if span != nil {
+		ext.SpanKindRPCClient.Set(span)
+
+		textCarrier := opentracing.TextMapCarrier{}
+		span.Tracer().Inject(span.Context(), opentracing.TextMap, textCarrier)
+
+		var b []byte
+		var err error
+		if b, err = json.Marshal(textCarrier); err != nil {
+			trLog.LogErrorField("error marshalling span context to json", err)
+			return "", err
+		}
+		result := base64.StdEncoding.EncodeToString(b)
+		return result, nil
+	} else {
+		return "", fmt.Errorf("unable to serialize SpanContext, no span in context: %v", ctx)
+	}
+}
+
 // ContextWithSpan - return context based on type of trace
 func ContextWithSpan(ctx context.Context, trace Tracer) (context.Context, bool) {
 	switch t := trace.(type) {
@@ -134,6 +156,31 @@ func StartTraceFromContext(ctx context.Context, msg string) (Tracer, context.Con
 	return trLog, ctx
 }
 
+func spanFromMetadataOrNew(msgMetadata map[string]string, msg string) (Tracer, context.Context) {
+	var span Tracer
+	var ctxWithSpan context.Context
+	otSpan, ok := msgMetadata[OpentracingContext]
+	if ok {
+		span, _ = Base64ToTrace(otSpan, msg)
+		ctxWithSpan, _ = ContextWithSpan(context.Background(), span)
+	} else {
+		span, ctxWithSpan = StartTraceFromContext(context.Background(), msg)
+	}
+	return span, ctxWithSpan
+}
+
+// IssueTrace -
+func IssueTrace(msgMetadata map[string]string, eventMsg, uuid, parentUUID string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(msgMetadata, eventMsg)
+
+	trace.LogStringField("event", eventMsg)
+	trace.LogStringField("message.UUID", uuid)
+	trace.LogStringField("message.Parent_UUID", parentUUID)
+	trace.Finish()
+
+	return ctxWithSpan
+}
+
 // TraceLogging -
 type TraceLogging struct {
 	Closer io.Closer
@@ -148,18 +195,18 @@ func (t TraceLogging) Close() {
 type Tracer interface {
 	LogStringField(key, value string)
 	LogIntField(key string, value int)
+	LogErrorField(key string, value error)
 	Finish()
 }
 
-// TraceSpan - represents wrapper around opentracing
+// TraceSpan - represents wrapper around opentracing; implements Tracer interface
 type TraceSpan struct {
 	otSpan   opentracing.Span
 	traceLog Tracer
 }
 
-// TraceLog - represents wrapper around conventional logging which now is done using log golang package
-// PLEASE NOTE: if log.Logger is replaced by something which uses log levels, we will use INFO level, since it corresponds the closest to the purpose
-// of opentracing
+// TraceLog - represents wrapper around conventional logging; implements Tracer interface
+// PLEASE NOTE: uses INFO level, since it corresponds the closest to the purpose of opentracing
 type TraceLog struct {
 	logger *zap.Logger
 }
@@ -185,6 +232,14 @@ func (s TraceSpan) LogIntField(key string, value int) {
 	s.traceLog.LogIntField(key, value)
 }
 
+// LogErrorField - TraceSpan implementation of Tracer interface method
+func (s TraceSpan) LogErrorField(key string, value error) {
+	s.otSpan.LogFields(
+		opentracingLog.Error(value),
+	)
+	s.traceLog.LogErrorField(key, value)
+}
+
 // LogStringField - TraceLog implementation of Tracer interface method
 func (l TraceLog) LogStringField(key, value string) {
 	l.logger.Info("tracing",
@@ -196,6 +251,13 @@ func (l TraceLog) LogStringField(key, value string) {
 func (l TraceLog) LogIntField(key string, value int) {
 	l.logger.Info("tracing",
 		zap.Int(key, value),
+	)
+}
+
+// LogErrorField is TraceLog implementation of Tracer interface
+func (l TraceLog) LogErrorField(key string, value error) {
+	l.logger.Error("tracing",
+		zap.Error(value),
 	)
 }
 

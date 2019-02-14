@@ -99,12 +99,14 @@ var (
 
 // OnRelay Server method implements linker's role in message processing; it applies business function fn
 // specified at Linker's creation
-func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
+func (link Link) OnRelay(aceMessage *rpc.Message) {
 	util.Show("linker.onRelay msg:", aceMessage)
+
+	ctxWithSpan := tracing.IssueTrace(aceMessage.GetMetaData(), "agent message receive", aceMessage.UUID, aceMessage.Parent_UUID)
 
 	switch msgProcessor := link.MsgProcessor.(type) {
 	case BusinessMessageProcessor:
-		clientRelay, buildErr := rpcclient.BuildClientRelay(ctx, aceMessage, sidecarHost, sidecarPort)
+		clientRelay, buildErr := rpcclient.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
 			log.Fatal("agent unable to BuildClientRelay",
 				zap.Error(buildErr),
@@ -112,10 +114,9 @@ func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 			return
 		}
 		defer func() {
-			clientRelay.CloseSend(ctx)
+			clientRelay.CloseSend(ctxWithSpan)
 		}()
-		err := msgProcessor(ctx, aceMessage.GetBusinessMessage(), clientRelay)
-		//defer closeSend
+		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
 			log.Error("message processor error",
 				zap.Error(err),
@@ -187,8 +188,8 @@ func (link Link) Start() {
 const timeFormat = "15:04:05.9999"
 
 // in linker, onRelayComplete does not need to be different from onRelay
-func (link Link) onRelayComplete(ctx context.Context, msg *rpc.Message) {
-	link.OnRelay(ctx, msg)
+func (link Link) onRelayComplete(msg *rpc.Message) {
+	link.OnRelay(msg)
 }
 
 func (link Link) registerWithSidecar() (bool, error) {
