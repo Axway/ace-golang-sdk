@@ -3,7 +3,6 @@ package linker
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -40,8 +39,6 @@ type Link struct {
 var link *Link
 var traceLogging tracing.TraceLogging
 var log = logging.Logger()
-var sidecarRegistrationTime time.Time
-var linkerRegistrationTime time.Time
 
 // MsgProducer - what is exposed to client business function
 type MsgProducer interface {
@@ -133,39 +130,15 @@ func (link Link) OnRelay(ctx context.Context, aceMessage *rpc.Message) {
 
 // OnSidecarRegistrationComplete can perform Linker-specific post registration actions
 func (link Link) OnSidecarRegistrationComplete(serviceInfo *rpc.ServiceInfo) error {
-	log.Info("linker reports onRegistrationComplete of sidecar",
+	log.Info("linker OnSidecarRegistrationComplete",
 		zap.String("sidecar ID", serviceInfo.GetServiceName()),
 	)
 
-	firstRegistration := sidecarRegistrationTime.IsZero()
-
-	log.Debug("linker reports onRegistrationComplete of sidecar",
-		zap.Bool("is sidecar first registration", firstRegistration),
-		zap.Time("sidecar registration time", sidecarRegistrationTime),
-		zap.Time("linker registration time", linkerRegistrationTime),
-	)
-
-	sidecarRegistrationTime = time.Now()
-
-	log.Debug("linker reports onRegistrationComplete of sidecar",
-		zap.Time("new sidecar registration time", sidecarRegistrationTime),
-	)
-
-	if sidecarRegistrationTime.After(linkerRegistrationTime) && !firstRegistration {
-		log.Debug("linker reports onRegistrationComplete of sidecar",
-			zap.Bool("firstRegistration", firstRegistration),
-			zap.String("OnSidecarRegistrationComplete", "not an initial sidecar registration, it is AFTER linker, it needs to RENEW"))
-
-		if ok, err := link.registerWithSidecar(); !ok {
-			log.Fatal("unable to register agent in response to sidecar registration",
-				zap.Error(err),
-			)
-			return err
-		}
-	} else {
-		log.Debug("linker reports onRegistrationComplete of sidecar",
-			zap.Bool("firstRegistration", firstRegistration),
-			zap.String("OnSidecarRegistrationComplete", "no need to re-register linker"))
+	if ok, err := link.registerWithSidecar(); !ok {
+		log.Fatal("unable to register agent in response to sidecar registration",
+			zap.Error(err),
+		)
+		return err
 	}
 
 	return nil
@@ -204,8 +177,6 @@ func (link Link) Start() {
 		log.Fatal("unable to Start agent",
 			zap.Error(err),
 		)
-	} else {
-		linkerRegistrationTime = time.Now()
 	}
 
 	<-waitc

@@ -7,6 +7,7 @@ import (
 	"net"
 
 	"github.com/Axway/ace-golang-sdk/rpc"
+	"github.com/Axway/ace-golang-sdk/util"
 	"github.com/Axway/ace-golang-sdk/util/logging"
 	"github.com/Axway/ace-golang-sdk/util/tracing"
 	"go.uber.org/zap"
@@ -131,6 +132,8 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 
 // StartServer creates new grpc LinkageService server returns error to prevent registration to take place
 func StartServer(host string, port uint16, server *Server) {
+	gracefulStop := util.CreateSignalChannel()
+
 	log.Debug("Starting Server",
 		zap.String("server.name", server.Name),
 		zap.String("server.host", host),
@@ -153,10 +156,18 @@ func StartServer(host string, port uint16, server *Server) {
 
 	rpc.RegisterLinkageServer(grpcServer, server)
 
+	go func() {
+		sig := <-gracefulStop
+		log.Debug("received system signal, shutting down server...", zap.String("signal", sig.String()))
+		grpcServer.GracefulStop()
+	}()
+
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatal("failed to serve",
 			zap.Error(err),
 		)
+	} else {
+		log.Info("server stopped")
 	}
 }
 
