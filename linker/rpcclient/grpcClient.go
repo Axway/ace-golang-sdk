@@ -103,7 +103,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 	waitc := make(chan struct{})
 	go func() {
-		log.Debug("ClientRelay: openining stream to receive Relay receipt")
+		log.Debug("ClientRelay: opening stream to receive Relay receipt")
 		for {
 			_, err := stream.Recv()
 			if err == io.EOF {
