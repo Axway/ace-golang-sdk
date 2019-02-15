@@ -51,7 +51,14 @@ func (s *Server) Registration(ctx context.Context, serviceInfo *rpc.ServiceInfo)
 
 	err := s.OnRegistrationComplete(serviceInfo)
 
-	return &rpc.Receipt{IsOk: err == nil}, err
+	if err != nil {
+		log.Error("error in Registration", zap.Error(err))
+		return &rpc.Receipt{
+			IsOk:  false,
+			Error: err.Error(),
+		}, err
+	}
+	return &rpc.Receipt{IsOk: true}, nil
 }
 
 // Relay implements LinkageService interface
