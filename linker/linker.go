@@ -86,7 +86,7 @@ func Register(name, version, description string, fn BusinessMessageProcessor) (*
 		return nil, fmt.Errorf("Incomplete registration. Provide the business service callback method")
 	}
 
-	display := fmt.Sprintf("%s-%s", cfg.ServiceName, cfg.ServiceVersion)
+	display := fmt.Sprintf("%s_%s", cfg.ServiceName, cfg.ServiceVersion)
 	traceLogging = tracing.InitTracing(display)
 
 	return link, nil
