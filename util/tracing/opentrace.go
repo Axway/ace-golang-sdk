@@ -181,6 +181,19 @@ func IssueTrace(msgMetadata map[string]string, eventMsg, uuid, parentUUID string
 	return ctxWithSpan
 }
 
+// IssueErrorTrace -
+func IssueErrorTrace(msgMetadata map[string]string, err error, msg, uuid, parentUUID string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(msgMetadata, "error")
+
+	trace.LogErrorField("error", err)
+	trace.LogStringField("error", msg)
+	trace.LogStringField("message.UUID", uuid)
+	trace.LogStringField("message.Parent_UUID", parentUUID)
+	trace.Finish()
+
+	return ctxWithSpan
+}
+
 // TraceLogging -
 type TraceLogging struct {
 	Closer io.Closer
@@ -234,6 +247,7 @@ func (s TraceSpan) LogIntField(key string, value int) {
 
 // LogErrorField - TraceSpan implementation of Tracer interface method
 func (s TraceSpan) LogErrorField(key string, value error) {
+	ext.Error.Set(s.otSpan, true)
 	s.otSpan.LogFields(
 		opentracingLog.Error(value),
 	)
