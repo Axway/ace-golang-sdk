@@ -118,9 +118,12 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		}()
 		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
-			log.Error("message processor error",
-				zap.Error(err),
-			)
+			log.Error("message processor error", zap.Error(err))
+			tracing.IssueErrorTrace(
+				aceMessage.GetMetaData(),
+				err,
+				"error processing business message",
+				aceMessage.UUID, aceMessage.Parent_UUID)
 		}
 	default:
 		panic(fmt.Sprintf("MsgProcessor of %s agent is not of expected BusinessMessageProcessor type, actual: %T\n",
