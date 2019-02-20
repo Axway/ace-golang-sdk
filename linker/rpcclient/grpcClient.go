@@ -25,6 +25,16 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 		zap.String("event", "ClientRegister"),
 		zap.String("service.name", serviceInfo.ServiceName),
 	)
+	gracefulStop := util.CreateSignalChannel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	go func() {
+		sig := <-gracefulStop
+		cancel()
+		log.Debug("received system signal, cancelling connection...", zap.String("signal", sig.String()))
+	}()
 
 	opts := []grpc.DialOption{
 		grpc.WithBlock(),
@@ -32,7 +42,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 		grpc.WithUnaryInterceptor(tracing.GetOpenTracingClientInterceptor()),
 	}
 
-	conn, err := grpc.Dial(hostInfo, opts...)
+	conn, err := grpc.DialContext(ctx, hostInfo, opts...)
 	if err != nil {
 		log.Error("cannot connect to registration server",
 			zap.String("error", err.Error()),
@@ -42,9 +52,6 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	defer conn.Close()
 
 	client := rpc.NewLinkageClient(conn)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	span, ctxWithSpan := tracing.StartTraceFromContext(ctx, "ClientRegister")
 	span.LogStringField("event", "start client Registration")
