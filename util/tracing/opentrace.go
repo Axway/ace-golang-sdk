@@ -61,9 +61,7 @@ func InitTracing(serviceDisplay string) TraceLogging {
 		}
 	}
 
-	return TraceLogging{
-		Closer: noopCloser{},
-	}
+	return NoopTraceLogging
 }
 
 // TraceToBase64 -
@@ -202,6 +200,12 @@ type TraceLogging struct {
 // Close -
 func (t TraceLogging) Close() {
 	t.Closer.Close()
+}
+
+// NoopTraceLogging so the value under Closer key is never nil; this is the initial value of sidecar.traceLogging
+// it allows call to Close in cases when sidecar is shutdown before registration completes and traceLogging is initialized
+var NoopTraceLogging = TraceLogging{
+	Closer: noopCloser{},
 }
 
 //Tracer - an interface to be implemented by TraceSpan and TraceLog types
