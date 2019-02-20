@@ -186,7 +186,11 @@ func IssueErrorTrace(msgMetadata map[string]string, err error, msg, uuid, parent
 	trace, ctxWithSpan := spanFromMetadataOrNew(msgMetadata, "error")
 
 	trace.LogErrorField("error", err)
+<<<<<<< HEAD
 	trace.LogStringField("error-info", msg)
+=======
+	trace.LogStringField("error", msg)
+>>>>>>> master
 	trace.LogStringField("message.UUID", uuid)
 	trace.LogStringField("message.Parent_UUID", parentUUID)
 	trace.Finish()
