@@ -223,6 +223,41 @@ func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMe
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
 		msg.MetaData[tracing.OpentracingContext] = b64
+	} else { //log it and continue
+		log.Error("error encoding tracing context", zap.Error(err))
+	}
+
+	if err := lcr.stream.Send(msg); err != nil {
+		log.Error("error sending", zap.String("error", err.Error()))
+
+		return NewSendingError(err)
+	}
+	util.Show("LinkerClientRelay sent msg:\n", msg)
+	return nil
+}
+
+// SendWithError -
+func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) error {
+	var msg *rpc.Message
+
+	switch error := err.(type) {
+	case ProcessingError:
+		// buildResult makes a copy of lcr.sourceMessage and assigns to Parent_UUID value of sourceMessage.UUID
+		// so if the message is to be committed, which in case of ProcessingError, it will be, we want to call
+		// buildResult to make a copy;
+		msg := buildResult(lcr.sourceMessage, nil)
+		msg.MetaData["TODO-key for ProcessingError"] = error.Error()
+	default:
+		// treat everything else as SystemError in case the 'business function' did not catch & convert whatever error they encountered to ours;
+		// so if it is a SystemError then no commit so use sourceMessage to send back
+		// it will not be a SendingError because that was already filtered out in linker.OnRelay
+		msg := lcr.sourceMessage
+		//TODO: add to metadata about SystemError
+		msg.MetaData["TODO-key for SystemError"] = error.Error()
+	}
+
+	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
+		msg.MetaData[tracing.OpentracingContext] = b64
 	} else {
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
