@@ -108,9 +108,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 	case BusinessMessageProcessor:
 		clientRelay, buildErr := rpcclient.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
-			log.Fatal("agent unable to BuildClientRelay",
-				zap.Error(buildErr),
-			)
+			log.Fatal("agent unable to BuildClientRelay", zap.Error(buildErr))
 			return
 		}
 		defer func() {
@@ -118,12 +116,19 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		}()
 		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
-			log.Error("message processor error", zap.Error(err))
 			tracing.IssueErrorTrace(
 				aceMessage.GetMetaData(),
 				err,
 				"error processing business message",
 				aceMessage.UUID, aceMessage.Parent_UUID)
+
+			switch error := err.(type) {
+			case SendingError: // log it as we don't want to send again
+				log.Error("SendingError", zap.Error(fmt.Errorf(error.Error())))
+			default:
+				clientRelay.SendWithError(ctxWithSpan, error)
+				log.Error("message processor error", zap.Error(err))
+			}
 		}
 	default:
 		panic(fmt.Sprintf("MsgProcessor of %s agent is not of expected BusinessMessageProcessor type, actual: %T\n",
@@ -210,4 +215,22 @@ func (link Link) registerWithSidecar() (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// NewProcessingError - convenience function to create ProcessingError
+func NewProcessingError(err error) rpcclient.ProcessingError {
+	return rpcclient.ProcessingError{
+		ErrorInfo: MsgErrorInfo{
+			ErrDescription: error.Error(),
+		},
+	}
+}
+
+// NewSystemError - convenience function to create SystemError
+func NewSystemError(err error) rpcclient.SystemError {
+	return rpcClient.SystemError{
+		ErrorInfo: MsgErrorInfo{
+			ErrDescription: error.Error(),
+		},
+	}
 }
