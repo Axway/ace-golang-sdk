@@ -2,6 +2,15 @@ package rpcclient
 
 import "fmt"
 
+const (
+	// ErrorSystem - metadata key name for rpc.Message.MetaData map to carry description of error encountered during message processing
+	// which is not payload-related;
+	ErrorSystem string = "ErrorSystem"
+
+	// ErrorProcessing - metadata key name for rpc.Message.MetaData map to carry description of error from payload processing
+	ErrorProcessing string = "ErrorProcessing"
+)
+
 // MsgErrorInfo -
 type MsgErrorInfo struct {
 	ErrDescription string
