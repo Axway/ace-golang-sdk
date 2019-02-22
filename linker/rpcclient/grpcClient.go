@@ -27,7 +27,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	)
 	gracefulStop := util.CreateSignalChannel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	go func() {
@@ -152,6 +152,7 @@ type LinkerClientRelay struct {
 	sourceMessage *rpc.Message
 	deferrables   []func()
 	stream        rpc.Linkage_RelayClient
+	sentCount     uint64
 }
 
 // ClientRelayHousekeeper - contains methods NOT exposed to the client business function
@@ -232,26 +233,21 @@ func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMe
 
 		return NewSendingError(err)
 	}
+	lcr.sentCount++
 	util.Show("LinkerClientRelay sent msg:\n", msg)
 	return nil
 }
 
 // SendWithError -
 func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) error {
-	var msg *rpc.Message
+	log.Debug("SendWithError", zap.Error(err))
+
+	msg := lcr.sourceMessage
 
 	switch error := err.(type) {
 	case ProcessingError:
-		// buildResult makes a copy of lcr.sourceMessage and assigns to Parent_UUID value of sourceMessage.UUID
-		// so if the message is to be committed, which in case of ProcessingError, it will be, we want to call
-		// buildResult to make a copy;
-		msg := buildResult(lcr.sourceMessage, nil)
 		msg.MetaData[ErrorProcessing] = error.Error()
 	default:
-		// treat everything else as SystemError in case the 'business function' did not catch & convert whatever error they encountered to ours;
-		// so if it is a SystemError then no commit so use sourceMessage to send back
-		// it will not be a SendingError because that was already filtered out in linker.OnRelay
-		msg := lcr.sourceMessage
 		msg.MetaData[ErrorSystem] = error.Error()
 	}
 
@@ -267,6 +263,7 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 		)
 		return err
 	}
+	lcr.sentCount++
 	util.Show("LinkerClientRelay sent msg:\n", msg)
 	return nil
 }
@@ -274,28 +271,33 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 // CloseSend -
 //
 func (lcr *LinkerClientRelay) CloseSend(ctx context.Context) {
-	waitc := make(chan struct{})
-	go func() {
-		log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
-		for {
-			_, err := lcr.stream.Recv()
-			if err == io.EOF {
-				log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
-				close(waitc)
-				return
+	if lcr.sentCount > 0 {
+		waitc := make(chan struct{})
+		go func() {
+			log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
+			for {
+				_, err := lcr.stream.Recv()
+				if err == io.EOF {
+					log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
+					close(waitc)
+					return
+				}
+				if err != nil {
+					log.Error("LinkerClientRelay, fatal error in stream.Recv",
+						zap.String("error", err.Error()),
+					)
+					return
+				}
+				log.Debug("LinkerClientRelay, got payload receipt")
 			}
-			if err != nil {
-				log.Error("LinkerClientRelay, fatal error in stream.Recv",
-					zap.String("error", err.Error()),
-				)
-				return
-			}
-			log.Debug("LinkerClientRelay, got payload receipt")
-		}
-	}()
-	lcr.stream.CloseSend()
+		}()
+		lcr.stream.CloseSend()
 
-	<-waitc
+		<-waitc
+	} else {
+		log.Debug("LinkerClientRelay.CloseSend nothing was sent, closing stream")
+		lcr.stream.CloseSend()
+	}
 	//wait for receipt func to complete
 	log.Debug("LinkerClientRelay.CloseSend completed")
 }
