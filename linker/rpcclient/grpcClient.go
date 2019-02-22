@@ -246,14 +246,13 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 		// so if the message is to be committed, which in case of ProcessingError, it will be, we want to call
 		// buildResult to make a copy;
 		msg := buildResult(lcr.sourceMessage, nil)
-		msg.MetaData["TODO-key for ProcessingError"] = error.Error()
+		msg.MetaData[ErrorProcessing] = error.Error()
 	default:
 		// treat everything else as SystemError in case the 'business function' did not catch & convert whatever error they encountered to ours;
 		// so if it is a SystemError then no commit so use sourceMessage to send back
 		// it will not be a SendingError because that was already filtered out in linker.OnRelay
 		msg := lcr.sourceMessage
-		//TODO: add to metadata about SystemError
-		msg.MetaData["TODO-key for SystemError"] = error.Error()
+		msg.MetaData[ErrorSystem] = error.Error()
 	}
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
