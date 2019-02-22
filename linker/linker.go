@@ -123,7 +123,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 				aceMessage.UUID, aceMessage.Parent_UUID)
 
 			switch error := err.(type) {
-			case SendingError: // log it as we don't want to send again
+			case rpcclient.SendingError: // log it as we don't want to send again
 				log.Error("SendingError", zap.Error(fmt.Errorf(error.Error())))
 			default:
 				clientRelay.SendWithError(ctxWithSpan, error)
@@ -220,17 +220,17 @@ func (link Link) registerWithSidecar() (bool, error) {
 // NewProcessingError - convenience function to create ProcessingError
 func NewProcessingError(err error) rpcclient.ProcessingError {
 	return rpcclient.ProcessingError{
-		ErrorInfo: MsgErrorInfo{
-			ErrDescription: error.Error(),
+		ErrorInfo: rpcclient.MsgErrorInfo{
+			ErrDescription: err.Error(),
 		},
 	}
 }
 
 // NewSystemError - convenience function to create SystemError
 func NewSystemError(err error) rpcclient.SystemError {
-	return rpcClient.SystemError{
-		ErrorInfo: MsgErrorInfo{
-			ErrDescription: error.Error(),
+	return rpcclient.SystemError{
+		ErrorInfo: rpcclient.MsgErrorInfo{
+			ErrDescription: err.Error(),
 		},
 	}
 }
