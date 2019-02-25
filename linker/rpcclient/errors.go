@@ -14,8 +14,6 @@ const (
 // MsgErrorInfo -
 type MsgErrorInfo struct {
 	ErrDescription string
-	MsgUUID        string
-	MsgParentUUID  string
 }
 
 // ProcessingError - signals errors encountered when processing payload
@@ -24,7 +22,7 @@ type ProcessingError struct {
 }
 
 func (e ProcessingError) Error() string {
-	return fmt.Sprintf("ProcessingError: %s MsgUUID: %s MstParentUUID: %s", e.ErrorInfo.ErrDescription, e.ErrorInfo.MsgUUID, e.ErrorInfo.MsgParentUUID)
+	return fmt.Sprintf("ProcessingError: %s", e.ErrorInfo.ErrDescription)
 }
 
 // SystemError - any other error not related to payload
@@ -33,7 +31,7 @@ type SystemError struct {
 }
 
 func (e SystemError) Error() string {
-	return fmt.Sprintf("SystemError: %s MsgUUID: %s MstParentUUID: %s", e.ErrorInfo.ErrDescription, e.ErrorInfo.MsgUUID, e.ErrorInfo.MsgParentUUID)
+	return fmt.Sprintf("SystemError: %s", e.ErrorInfo.ErrDescription)
 }
 
 // SendingError -
@@ -42,7 +40,7 @@ type SendingError struct {
 }
 
 func (e SendingError) Error() string {
-	return fmt.Sprintf("SendingError: %s MsgUUID: %s MstParentUUID: %s", e.ErrorInfo.ErrDescription, e.ErrorInfo.MsgUUID, e.ErrorInfo.MsgParentUUID)
+	return fmt.Sprintf("SendingError: %s", e.ErrorInfo.ErrDescription)
 }
 
 // NewSendingError - constructor function
