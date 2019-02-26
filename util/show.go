@@ -21,10 +21,12 @@ func Show(descr string, aceMsg *rpc.Message) {
 	log.Debugf("\tPattern: %v, with %d children: ", aceMsg.Pattern, len(aceMsg.Pattern.Child))
 	showPattern("\t\t", aceMsg.Pattern.Child)
 	showMetadata("\t", aceMsg.GetMetaData())
-	if aceMsg.BusinessMessage != nil && aceMsg.BusinessMessage.Payload != nil {
-		log.Debugf("\tBusinessMessage.Payload.Body: '%v'", string(aceMsg.BusinessMessage.Payload.Body))
-	} else if aceMsg.BusinessMessage != nil {
+	if aceMsg.BusinessMessage != nil {
+		showMetadata("\t", aceMsg.BusinessMessage.GetMetaData())
 		log.Debugf("\tBusinessMessage.Payload: %v", aceMsg.BusinessMessage.Payload)
+		if aceMsg.BusinessMessage.Payload != nil {
+			log.Debugf("\tBusinessMessage.Payload.Body: '%v'", string(aceMsg.BusinessMessage.Payload.Body))
+		}
 	} else {
 		log.Debugf("\tBusinessMessage: %v", aceMsg.BusinessMessage)
 	}
