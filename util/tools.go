@@ -27,10 +27,16 @@ func CreateSignalChannel() chan os.Signal {
 func CopyStringsMapTo(source map[string]string, target *rpc.Message) {
 	for key, val := range source {
 		switch key {
+<<<<<<< HEAD
 		case client.ID:
 			target.ID = val
 		case client.ServiceName:
 			target.TopicName = val
+=======
+		case "ID":
+			target.ID = val
+
+>>>>>>> f7f38775364a64a485efc845aebd462f9ade31d1
 		default:
 			log.Warn("util.CopyStringsMapTo unknown mapping of key to rpc.Message field",
 				zap.String("key", key),
