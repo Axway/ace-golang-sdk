@@ -154,12 +154,11 @@ func StartTraceFromContext(ctx context.Context, msg string) (Tracer, context.Con
 	return trLog, ctx
 }
 
-func spanFromMetadataOrNew(msgMetadata map[string]string, msg string) (Tracer, context.Context) {
+func spanFromMetadataOrNew(openTracingContext, msg string) (Tracer, context.Context) {
 	var span Tracer
 	var ctxWithSpan context.Context
-	otSpan, ok := msgMetadata[OpentracingContext]
-	if ok {
-		span, _ = Base64ToTrace(otSpan, msg)
+	if len(openTracingContext) > 0 {
+		span, _ = Base64ToTrace(openTracingContext, msg)
 		ctxWithSpan, _ = ContextWithSpan(context.Background(), span)
 	} else {
 		span, ctxWithSpan = StartTraceFromContext(context.Background(), msg)
@@ -168,8 +167,8 @@ func spanFromMetadataOrNew(msgMetadata map[string]string, msg string) (Tracer, c
 }
 
 // IssueTrace -
-func IssueTrace(msgMetadata map[string]string, eventMsg, uuid, parentUUID string) context.Context {
-	trace, ctxWithSpan := spanFromMetadataOrNew(msgMetadata, eventMsg)
+func IssueTrace(openTracingContext, eventMsg, uuid, parentUUID string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(openTracingContext, eventMsg)
 
 	trace.LogStringField("event", eventMsg)
 	trace.LogStringField("message.UUID", uuid)
@@ -180,8 +179,8 @@ func IssueTrace(msgMetadata map[string]string, eventMsg, uuid, parentUUID string
 }
 
 // IssueErrorTrace -
-func IssueErrorTrace(msgMetadata map[string]string, err error, msg, uuid, parentUUID string) context.Context {
-	trace, ctxWithSpan := spanFromMetadataOrNew(msgMetadata, "error")
+func IssueErrorTrace(opentracingContext string, err error, msg, uuid, parentUUID string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(opentracingContext, "error")
 
 	trace.LogErrorField("error", err)
 	trace.LogStringField("error-info", msg)

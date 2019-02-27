@@ -5,8 +5,10 @@ import (
 	"os/signal"
 	"syscall"
 
+	"git.ecd.axway.int/choreo/stomp/core/messaging/client"
 	"github.com/Axway/ace-golang-sdk/rpc"
 	"github.com/Axway/ace-golang-sdk/util/logging"
+	"go.uber.org/zap"
 )
 
 var log = logging.Logger()
@@ -19,28 +21,45 @@ func CreateSignalChannel() chan os.Signal {
 	return signalChannel
 }
 
-// CopyStringsMap - returns copy of the map passed as parameter
-func CopyStringsMap(m map[string]string) map[string]string {
-	result := make(map[string]string)
-
-	for key, value := range m {
-		result[key] = value
+// CopyStringsMapTo - copies source map to dest which has to be rpc.Message using predefined mapping of keys
+// to message fields
+// PLEASE NOTE: if mapping of key is not present, the key will be ignored and warning logged
+func CopyStringsMapTo(source map[string]string, target *rpc.Message) {
+	for key, val := range source {
+		switch key {
+		case client.ID:
+			target.ID = val
+		case client.ServiceName:
+			target.TopicName = val
+		default:
+			log.Warn("util.CopyStringsMapTo unknown mapping of key to rpc.Message field",
+				zap.String("key", key),
+				zap.String("val", val),
+			)
+		}
 	}
-
-	return result
 }
 
-// CopyStringsMapTo - copies source map to dest which has to be aceMsg in order to test for uninitialized MetaData
-// PLEASE NOTE: if key is present in target metadata, it will be overwritten
-func CopyStringsMapTo(source map[string]string, aceMsgTarget *rpc.Message) {
-	if aceMsgTarget.MetaData == nil {
-		aceMsgTarget.MetaData = make(map[string]string)
+//CopyMessage - shallow copy of source message; DOES NOT set UUID or Parent_UUID
+func CopyMessage(source *rpc.Message) *rpc.Message {
+	msg := rpc.Message{
+		CHN_UUID:           source.GetCHN_UUID(),
+		CHX_UUID:           source.GetCHX_UUID(),
+		ID:                 source.GetID(),
+		TopicName:          source.GetTopicName(),
+		OpentracingContext: source.GetOpentracingContext(),
+
+		//SequenceTerm:       seqTerm, TODO: sidecar will need to do that when Send indicates io.EOF
+		//SequenceUpperBound: seqUpperBound,
 	}
-	for key, val := range source {
-		oldVal, exists := aceMsgTarget.MetaData[key]
-		if exists {
-			log.Sugar().Debugf("CopyStringsMapTo will overwrite existing key/value pair: %s=%s with new value: %s\n", key, oldVal, val)
-		}
-		aceMsgTarget.MetaData[key] = val
+	if source.HasProcessingError {
+		msg.HasProcessingError = true
+		msg.ProcessingErrorDescription = source.GetProcessingErrorDescription()
 	}
+	if source.HasSystemError {
+		msg.HasSystemError = true
+		msg.SystemErrorDescription = source.GetSystemErrorDescription()
+	}
+
+	return &msg
 }
