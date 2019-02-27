@@ -76,7 +76,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	var hostInfo = fmt.Sprintf("%s:%d", host, port)
 
 	if spanAsBase64, err := tracing.ContextWithSpanToBase64(clientContext); err == nil {
-		msg.MetaData[tracing.OpentracingContext] = spanAsBase64
+		msg.OpentracingContext = spanAsBase64
 	} else {
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
@@ -223,7 +223,7 @@ func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMe
 	msg := buildResult(lcr.sourceMessage, bm)
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-		msg.MetaData[tracing.OpentracingContext] = b64
+		msg.OpentracingContext = b64
 	} else { //log it and continue
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
@@ -246,13 +246,15 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 
 	switch error := err.(type) {
 	case ProcessingError:
-		msg.MetaData[ErrorProcessing] = error.Error()
+		msg.HasProcessingError = true
+		msg.ProcessingErrorDescription = error.Error()
 	default:
-		msg.MetaData[ErrorSystem] = error.Error()
+		msg.HasSystemError = true
+		msg.SystemErrorDescription = error.Error()
 	}
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-		msg.MetaData[tracing.OpentracingContext] = b64
+		msg.OpentracingContext = b64
 	} else {
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
@@ -302,27 +304,18 @@ func (lcr *LinkerClientRelay) CloseSend(ctx context.Context) {
 	log.Debug("LinkerClientRelay.CloseSend completed")
 }
 
+// UUID of the resulting message is not set, it will be set by kafka producer before placing in queue
 func buildResult(parentMsg *rpc.Message, bm *messaging.BusinessMessage) *rpc.Message {
-	//copy needed attributes
-	// then set/change to reflect it's a child
+	msg := util.CopyMessage(parentMsg)
+
 	copyStepPattern := rpc.StepPattern{}
 	copyPattern(&copyStepPattern, parentMsg.Pattern)
 
-	msg := rpc.Message{
-		Parent_UUID: parentMsg.GetUUID(),
-		CHN_UUID:    parentMsg.GetCHN_UUID(),
-		CHX_UUID:    parentMsg.GetCHX_UUID(),
-		Pattern:     &copyStepPattern,
-
-		// UUID:            uuid.New().String(), do not set UUID as it will be set by kafka producer before placed in queue
-		BusinessMessage: bm,
-		//SequenceTerm:       seqTerm, TODO: sidecar will need to do that when Send indicates io.EOF
-		//SequenceUpperBound: seqUpperBound,
-	}
-
-	msg.MetaData = util.CopyStringsMap(parentMsg.GetMetaData())
-
-	return &msg
+	// then set/change to reflect it's a child
+	msg.Parent_UUID = parentMsg.GetUUID()
+	msg.Pattern = &copyStepPattern
+	msg.BusinessMessage = bm
+	return msg
 }
 
 func copyPattern(target *rpc.StepPattern, source *rpc.StepPattern) {

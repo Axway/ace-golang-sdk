@@ -19,8 +19,18 @@ func Show(descr string, aceMsg *rpc.Message) {
 	log.Debugf("\tSequenceTerm: %d", aceMsg.SequenceTerm)
 	log.Debugf("\tSequenceUpperBound: %d", aceMsg.SequenceUpperBound)
 	log.Debugf("\tPattern: %v, with %d children: ", aceMsg.Pattern, len(aceMsg.Pattern.Child))
+
 	showPattern("\t\t", aceMsg.Pattern.Child)
-	showMetadata("\t", aceMsg.GetMetaData())
+
+	log.Debugf("\tTopicName: '%s'", aceMsg.GetTopicName())
+	log.Debugf("\tID: '%s'", aceMsg.GetID())
+	if aceMsg.HasProcessingError {
+		log.Debugf("\tProcessingError: %s", aceMsg.GetProcessingErrorDescription())
+	}
+	if aceMsg.HasSystemError {
+		log.Debugf("\tSystemError: %s", aceMsg.GetSystemErrorDescription())
+	}
+	log.Debugf("\tOpentracingContext:", aceMsg.GetOpentracingContext())
 	if aceMsg.BusinessMessage != nil {
 		showMetadata("\t", aceMsg.BusinessMessage.GetMetaData())
 		log.Debugf("\tBusinessMessage.Payload: %v", aceMsg.BusinessMessage.Payload)
