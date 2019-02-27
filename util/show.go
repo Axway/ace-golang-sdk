@@ -24,11 +24,9 @@ func Show(descr string, aceMsg *rpc.Message) {
 
 	log.Debugf("\tTopicName: '%s'", aceMsg.GetTopicName())
 	log.Debugf("\tID: '%s'", aceMsg.GetID())
-	if aceMsg.HasProcessingError {
-		log.Debugf("\tProcessingError: %s", aceMsg.GetProcessingErrorDescription())
-	}
-	if aceMsg.HasSystemError {
-		log.Debugf("\tSystemError: %s", aceMsg.GetSystemErrorDescription())
+	if aceMsg.ErrorType != rpc.Message_NONE {
+		log.Debugf("\tError: %s", aceMsg.ErrorType)
+		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
 	}
 	log.Debugf("\tOpentracingContext:", aceMsg.GetOpentracingContext())
 	if aceMsg.BusinessMessage != nil {

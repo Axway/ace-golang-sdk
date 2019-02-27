@@ -5,10 +5,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"git.ecd.axway.int/choreo/stomp/core/messaging/client"
 	"github.com/Axway/ace-golang-sdk/rpc"
 	"github.com/Axway/ace-golang-sdk/util/logging"
-	"go.uber.org/zap"
 )
 
 var log = logging.Logger()
@@ -19,25 +17,6 @@ func CreateSignalChannel() chan os.Signal {
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
 
 	return signalChannel
-}
-
-// CopyStringsMapTo - copies source map to dest which has to be rpc.Message using predefined mapping of keys
-// to message fields
-// PLEASE NOTE: if mapping of key is not present, the key will be ignored and warning logged
-func CopyStringsMapTo(source map[string]string, target *rpc.Message) {
-	for key, val := range source {
-		switch key {
-		case client.ID:
-			target.ID = val
-		case client.ServiceName:
-			target.TopicName = val
-		default:
-			log.Warn("util.CopyStringsMapTo unknown mapping of key to rpc.Message field",
-				zap.String("key", key),
-				zap.String("val", val),
-			)
-		}
-	}
 }
 
 //CopyMessage - shallow copy of source message; DOES NOT set UUID or Parent_UUID
@@ -52,13 +31,9 @@ func CopyMessage(source *rpc.Message) *rpc.Message {
 		//SequenceTerm:       seqTerm, TODO: sidecar will need to do that when Send indicates io.EOF
 		//SequenceUpperBound: seqUpperBound,
 	}
-	if source.HasProcessingError {
-		msg.HasProcessingError = true
-		msg.ProcessingErrorDescription = source.GetProcessingErrorDescription()
-	}
-	if source.HasSystemError {
-		msg.HasSystemError = true
-		msg.SystemErrorDescription = source.GetSystemErrorDescription()
+	if source.ErrorType != rpc.Message_NONE {
+		msg.ErrorType = source.GetErrorType()
+		msg.ErrorDescription = source.GetErrorDescription()
 	}
 
 	return &msg

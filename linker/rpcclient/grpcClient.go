@@ -246,11 +246,11 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 
 	switch error := err.(type) {
 	case ProcessingError:
-		msg.HasProcessingError = true
-		msg.ProcessingErrorDescription = error.Error()
+		msg.ErrorType = rpc.Message_PROCESSING
+		msg.ErrorDescription = error.Error()
 	default:
-		msg.HasSystemError = true
-		msg.SystemErrorDescription = error.Error()
+		msg.ErrorType = rpc.Message_SYSTEM
+		msg.ErrorDescription = error.Error()
 	}
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
