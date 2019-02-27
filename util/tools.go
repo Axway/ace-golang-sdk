@@ -19,28 +19,22 @@ func CreateSignalChannel() chan os.Signal {
 	return signalChannel
 }
 
-// CopyStringsMap - returns copy of the map passed as parameter
-func CopyStringsMap(m map[string]string) map[string]string {
-	result := make(map[string]string)
+//CopyMessage - shallow copy of source message; DOES NOT set UUID or Parent_UUID
+func CopyMessage(source *rpc.Message) *rpc.Message {
+	msg := rpc.Message{
+		CHN_UUID:           source.GetCHN_UUID(),
+		CHX_UUID:           source.GetCHX_UUID(),
+		ID:                 source.GetID(),
+		TopicName:          source.GetTopicName(),
+		OpentracingContext: source.GetOpentracingContext(),
 
-	for key, value := range m {
-		result[key] = value
+		//SequenceTerm:       seqTerm, TODO: sidecar will need to do that when Send indicates io.EOF
+		//SequenceUpperBound: seqUpperBound,
+	}
+	if source.ErrorType != rpc.Message_NONE {
+		msg.ErrorType = source.GetErrorType()
+		msg.ErrorDescription = source.GetErrorDescription()
 	}
 
-	return result
-}
-
-// CopyStringsMapTo - copies source map to dest which has to be aceMsg in order to test for uninitialized MetaData
-// PLEASE NOTE: if key is present in target metadata, it will be overwritten
-func CopyStringsMapTo(source map[string]string, aceMsgTarget *rpc.Message) {
-	if aceMsgTarget.MetaData == nil {
-		aceMsgTarget.MetaData = make(map[string]string)
-	}
-	for key, val := range source {
-		oldVal, exists := aceMsgTarget.MetaData[key]
-		if exists {
-			log.Sugar().Debugf("CopyStringsMapTo will overwrite existing key/value pair: %s=%s with new value: %s\n", key, oldVal, val)
-		}
-		aceMsgTarget.MetaData[key] = val
-	}
+	return &msg
 }

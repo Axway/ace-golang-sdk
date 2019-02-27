@@ -19,13 +19,20 @@ func Show(descr string, aceMsg *rpc.Message) {
 	log.Debugf("\tSequenceTerm: %d", aceMsg.SequenceTerm)
 	log.Debugf("\tSequenceUpperBound: %d", aceMsg.SequenceUpperBound)
 	log.Debugf("\tPattern: %v, with %d children: ", aceMsg.Pattern, len(aceMsg.Pattern.Child))
+
 	showPattern("\t\t", aceMsg.Pattern.Child)
-	showMetadata("\t", aceMsg.GetMetaData())
+
+	log.Debugf("\tTopicName: '%s'", aceMsg.GetTopicName())
+	log.Debugf("\tID: '%s'", aceMsg.GetID())
+	if aceMsg.ErrorType != rpc.Message_NONE {
+		log.Debugf("\tError: %s", aceMsg.ErrorType)
+		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
+	}
+	log.Debugf("\tOpentracingContext:", aceMsg.GetOpentracingContext())
 	if aceMsg.BusinessMessage != nil {
-		showMetadata("\t", aceMsg.BusinessMessage.GetMetaData())
-		log.Debugf("\tBusinessMessage.Payload: %v", aceMsg.BusinessMessage.Payload)
+		showMetadata("\t business", aceMsg.BusinessMessage.GetMetaData())
 		if aceMsg.BusinessMessage.Payload != nil {
-			log.Debugf("\tBusinessMessage.Payload.Body: '%v'", string(aceMsg.BusinessMessage.Payload.Body))
+			log.Debugf("\tBusinessMessage.Payload.Body (as string): '%s'", string(aceMsg.BusinessMessage.Payload.Body))
 		}
 	} else {
 		log.Debugf("\tBusinessMessage: %v", aceMsg.BusinessMessage)
@@ -46,7 +53,11 @@ func showPattern(nestingTabs string, child []*rpc.StepPattern) {
 
 func showMetadata(nestingTabs string, md map[string]string) {
 	log := zlog.Sugar()
-	log.Debugf("%s message has %d metadata item(s):", nestingTabs, len(md))
+	if len(md) > 0 {
+		log.Debugf("%s message has %d metadata item(s):", nestingTabs, len(md))
+	} else {
+		log.Debugf("%s message has no metadata items:", nestingTabs)
+	}
 	for key, val := range md {
 		log.Debugf("%s metadata key='%s' value='%s'", nestingTabs, key, val)
 	}
