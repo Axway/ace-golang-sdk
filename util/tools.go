@@ -24,7 +24,7 @@ func CopyMessage(source *rpc.Message) *rpc.Message {
 	msg := rpc.Message{
 		CHN_UUID:           source.GetCHN_UUID(),
 		CHX_UUID:           source.GetCHX_UUID(),
-		ID:                 source.GetID(),
+		Consumption_ID:     source.GetConsumption_ID(),
 		TopicName:          source.GetTopicName(),
 		OpentracingContext: source.GetOpentracingContext(),
 
