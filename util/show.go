@@ -23,7 +23,7 @@ func Show(descr string, aceMsg *rpc.Message) {
 	showPattern("\t\t", aceMsg.Pattern.Child)
 
 	log.Debugf("\tTopicName: '%s'", aceMsg.GetTopicName())
-	log.Debugf("\tID: '%s'", aceMsg.GetID())
+	log.Debugf("\tID: '%s'", aceMsg.GetConsumption_ID())
 	if aceMsg.ErrorType != rpc.Message_NONE {
 		log.Debugf("\tError: %s", aceMsg.ErrorType)
 		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
