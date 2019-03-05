@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Axway/ace-golang-sdk/messaging"
 	"github.com/Axway/ace-golang-sdk/rpc"
 )
 
@@ -74,4 +75,36 @@ func Test_copyStepPattern_two_levels(t *testing.T) {
 			len(orig.Child[0].Child), len(target.Child[0].Child)))
 	}
 
+}
+
+func TestBuildResult(t *testing.T) {
+	parentMsg := &rpc.Message{
+		UUID: "test_UUID",
+		Pattern: &rpc.StepPattern{
+			ServiceName:    "test-a",
+			ServiceVersion: "xxx",
+		},
+	}
+	bMsg := &messaging.BusinessMessage{
+		Payload: &messaging.Payload{
+			Body: []byte("test"),
+		},
+	}
+
+	copy := buildResult(parentMsg, bMsg)
+
+	if copy.GetParent_UUID() != parentMsg.GetUUID() {
+		t.Errorf("expected UUID of parent msg to become Parent_UUID of a copy, expected: %s got %s", parentMsg.GetUUID(), copy.GetParent_UUID())
+	}
+	if len(copy.GetUUID()) > 0 {
+		t.Errorf("expected UUID of copied message to be empty")
+	}
+
+	if copy.Pattern.ServiceName != parentMsg.Pattern.ServiceName || copy.Pattern.ServiceVersion != parentMsg.Pattern.ServiceVersion {
+		t.Errorf("Pattern should have been copied")
+	}
+
+	if string(copy.BusinessMessage.Payload.Body) != "test" {
+		t.Errorf("Business message should have been copied")
+	}
 }
