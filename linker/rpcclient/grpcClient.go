@@ -153,6 +153,7 @@ type LinkerClientRelay struct {
 	deferrables   []func()
 	stream        rpc.Linkage_RelayClient
 	sentCount     uint64
+	traceContext  context.Context
 }
 
 // ClientRelayHousekeeper - contains methods NOT exposed to the client business function
@@ -162,11 +163,12 @@ type ClientRelayHousekeeper interface {
 	CloseSend(context.Context)
 }
 
-// BuildClientRelay -
+// BuildClientRelay - saves clientContext here so opentraces emitted from sidecar after relay from linker will originate from it
 func BuildClientRelay(clientContext context.Context, aceMsg *rpc.Message, host string, port uint16) (*LinkerClientRelay, error) {
 	result := LinkerClientRelay{
 		sourceMessage: aceMsg,
 		deferrables:   make([]func(), 0),
+		traceContext:  clientContext,
 	}
 	err := result.configure(clientContext, host, port)
 	if err != nil {
@@ -218,9 +220,10 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 }
 
 // Send -
-func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMessage) error {
+func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 	//combine with sourceMessage
 	msg := buildResult(lcr.sourceMessage, bm)
+	ctx := lcr.traceContext
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
 		msg.OpentracingContext = b64
@@ -239,10 +242,11 @@ func (lcr *LinkerClientRelay) Send(ctx context.Context, bm *messaging.BusinessMe
 }
 
 // SendWithError -
-func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) error {
+func (lcr *LinkerClientRelay) SendWithError(err error) error {
 	log.Debug("SendWithError", zap.Error(err))
 
 	msg := lcr.sourceMessage
+	ctx := lcr.traceContext
 
 	switch error := err.(type) {
 	case ProcessingError:
@@ -272,7 +276,7 @@ func (lcr *LinkerClientRelay) SendWithError(ctx context.Context, err error) erro
 
 // CloseSend -
 //
-func (lcr *LinkerClientRelay) CloseSend(ctx context.Context) {
+func (lcr *LinkerClientRelay) CloseSend() {
 	if lcr.sentCount > 0 {
 		waitc := make(chan struct{})
 		go func() {

@@ -42,7 +42,7 @@ var log = logging.Logger()
 
 // MsgProducer - what is exposed to client business function
 type MsgProducer interface {
-	Send(context.Context, *messaging.BusinessMessage) error
+	Send(*messaging.BusinessMessage) error
 }
 
 // BusinessMessageProcessor type of 'business' function used to process paylod relayed to Linker
@@ -112,7 +112,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 			return
 		}
 		defer func() {
-			clientRelay.CloseSend(ctxWithSpan)
+			clientRelay.CloseSend()
 		}()
 		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
@@ -126,7 +126,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 			case rpcclient.SendingError: // log it as we don't want to send again
 				log.Error("SendingError", zap.Error(fmt.Errorf(error.Error())))
 			default:
-				clientRelay.SendWithError(ctxWithSpan, error)
+				clientRelay.SendWithError(error)
 				log.Error("message processor error", zap.Error(err))
 			}
 		}
