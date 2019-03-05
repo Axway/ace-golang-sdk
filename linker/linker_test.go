@@ -69,6 +69,7 @@ type Linkage_RelayClient interface {
 type linkageRelayClient struct{}
 
 var closeSendCalled bool
+var sentMessage *rpc.Message
 
 func (l linkageRelayClient) CloseSend() error { //grpc.ClientStream interface method
 	fmt.Printf("CloseSend called")
@@ -78,8 +79,9 @@ func (l linkageRelayClient) CloseSend() error { //grpc.ClientStream interface me
 func (l linkageRelayClient) Context() context.Context     { return context.Background() }
 func (l linkageRelayClient) Header() (metadata.MD, error) { return nil, nil }
 func (l linkageRelayClient) Trailer() metadata.MD         { return nil }
-func (l linkageRelayClient) Send(*rpc.Message) error {
+func (l linkageRelayClient) Send(m *rpc.Message) error {
 	fmt.Printf("Send of rpc.Message called")
+	sentMessage = m
 	return nil
 }
 func (l linkageRelayClient) Recv() (*rpc.Receipt, error) { return nil, io.EOF }
@@ -137,6 +139,8 @@ func TestOnRelayNoErrors(t *testing.T) {
 		MsgProcessor: BusinessMessageProcessor(testProc),
 	}
 
+	thisConsumptionID := "100"
+
 	aceMsg := &rpc.Message{
 		Pattern: &rpc.StepPattern{
 			ServiceName:    "abc",
@@ -147,6 +151,7 @@ func TestOnRelayNoErrors(t *testing.T) {
 				Body: []byte("test"),
 			},
 		},
+		Consumption_ID: thisConsumptionID,
 	}
 
 	link.OnRelay(aceMsg)
@@ -156,6 +161,16 @@ func TestOnRelayNoErrors(t *testing.T) {
 	}
 
 	//was the testProc called with aceMsg.GetBusinessMessage()?
+	if testProcBusMsg == nil {
+		t.Errorf("testProc function should have saved its argument to testProcBusMsg")
+	}
+	if string(testProcBusMsg.Payload.Body) != "test" {
+		t.Errorf("testProc function should have been called with BusinessMessage.Payload.Body: %v but got %v", []byte("test"), testProcBusMsg.Payload.Body)
+	}
+	if sentMessage != nil {
+		t.Errorf("BusinessMessageProcessor function is normally responsible for calling Stream.Send and since we did not set testProc to do that, " +
+			"non-null sentMessage indicates a condition of incorrect setup")
+	}
 }
 
 func testProcReturnProcessingError(c context.Context, bm *messaging.BusinessMessage, mp MsgProducer) error {
@@ -170,6 +185,8 @@ func TestOnRelayProcessingError(t *testing.T) {
 		MsgProcessor: BusinessMessageProcessor(testProcReturnProcessingError),
 	}
 
+	thisConsumptionID := "200"
+
 	aceMsg := &rpc.Message{
 		Pattern: &rpc.StepPattern{
 			ServiceName:    "abc",
@@ -180,11 +197,38 @@ func TestOnRelayProcessingError(t *testing.T) {
 				Body: []byte("test"),
 			},
 		},
+		Consumption_ID: thisConsumptionID,
+	}
+	if aceMsg.GetErrorType() != rpc.Message_NONE {
+		t.Errorf("ace message has incorrect ErrorType, expected the default value of NONE, got: %v", aceMsg.GetErrorType())
 	}
 
 	link.OnRelay(aceMsg)
 
 	if !closeSendCalled {
 		t.Errorf("expected CloseSend on LinkerClientRelay to have been called")
+	}
+
+	// aceMsg is passed as source message when BuildClientRelay is called, so we can look for error type on it here. Alternatively,
+	// we can test if we saved it as 'sentMessage' which will both show us that:
+	// a) Send was called (otherwise sentMessage will be nil)
+	// b) test sentMessage to carry error information
+	if aceMsg.GetErrorType() != rpc.Message_PROCESSING {
+		t.Errorf("when BusinessMessageProcessor function returns ProcessingError, it should be present in message, but got: %v",
+			aceMsg.GetErrorType())
+	}
+
+	//test Send was called by getting its message argument
+	if sentMessage == nil {
+		t.Errorf("unable to examine message saved from call to Stream.Send method")
+	}
+
+	if sentMessage.GetConsumption_ID() != thisConsumptionID {
+		t.Errorf("sanity check: wrong message saved from call to Stream.Send method")
+	}
+
+	if sentMessage.GetErrorType() != rpc.Message_PROCESSING {
+		t.Errorf("when BusinessMessageProcessor function returns ProcessingError, it should be present in sentMessage, but got: %v",
+			sentMessage.GetErrorType())
 	}
 }
