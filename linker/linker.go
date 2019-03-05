@@ -27,6 +27,25 @@ type AceLinkerConfig struct {
 	ServiceDescription string `cfg:"SERVICE_DESCRIPTION"`
 }
 
+// RPCClient .
+type RPCClient interface {
+	BuildClientRelay(clientContext context.Context, aceMsg *rpc.Message, host string, port uint16) (*rpcclient.LinkerClientRelay, error)
+	ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (bool, error)
+}
+
+type rpcClient struct {
+}
+
+// rpcClient implements RPCClient interface
+func (c *rpcClient) BuildClientRelay(clientContext context.Context, aceMsg *rpc.Message, host string, port uint16) (*rpcclient.LinkerClientRelay, error) {
+	return rpcclient.BuildClientRelay(clientContext, aceMsg, host, port)
+}
+
+// rpcClient implements RPCClient interface
+func (c *rpcClient) ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (bool, error) {
+	return rpcclient.ClientRegister(host, port, serviceInfo)
+}
+
 // Link combines what is specific to Linker functionality
 type Link struct {
 	cfg          AceLinkerConfig
@@ -34,6 +53,7 @@ type Link struct {
 	version      string
 	description  string
 	MsgProcessor interface{}
+	client       RPCClient
 }
 
 var link *Link
@@ -54,7 +74,9 @@ func Register(name, version, description string, fn BusinessMessageProcessor) (*
 		return link, fmt.Errorf("Service registration already initialized")
 	}
 
-	link = &Link{}
+	link = &Link{
+		client: &rpcClient{},
+	}
 	var cfg AceLinkerConfig
 	config.ReadConfigFromEnv(&cfg)
 
@@ -106,7 +128,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 
 	switch msgProcessor := link.MsgProcessor.(type) {
 	case BusinessMessageProcessor:
-		clientRelay, buildErr := rpcclient.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
+		clientRelay, buildErr := link.client.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
 			log.Fatal("agent unable to BuildClientRelay", zap.Error(buildErr))
 			return
@@ -208,7 +230,7 @@ func (link Link) registerWithSidecar() (bool, error) {
 		ServiceHost:        link.cfg.ServerHost,
 		ServicePort:        uint32(link.cfg.ServerPort),
 	}
-	if ok, err := rpcclient.ClientRegister(sidecarHost, sidecarPort, &serviceInfo); !ok {
+	if ok, err := link.client.ClientRegister(sidecarHost, sidecarPort, &serviceInfo); !ok {
 		log.Error("ClientRegistration of agent error",
 			zap.Error(err),
 		)

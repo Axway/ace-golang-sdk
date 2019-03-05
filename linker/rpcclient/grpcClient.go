@@ -149,9 +149,9 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 // LinkerClientRelay -
 type LinkerClientRelay struct {
-	sourceMessage *rpc.Message
+	SourceMessage *rpc.Message
 	deferrables   []func()
-	stream        rpc.Linkage_RelayClient
+	Stream        rpc.Linkage_RelayClient
 	sentCount     uint64
 	traceContext  context.Context
 }
@@ -166,7 +166,7 @@ type ClientRelayHousekeeper interface {
 // BuildClientRelay - saves clientContext here so opentraces emitted from sidecar after relay from linker will originate from it
 func BuildClientRelay(clientContext context.Context, aceMsg *rpc.Message, host string, port uint16) (*LinkerClientRelay, error) {
 	result := LinkerClientRelay{
-		sourceMessage: aceMsg,
+		SourceMessage: aceMsg,
 		deferrables:   make([]func(), 0),
 		traceContext:  clientContext,
 	}
@@ -208,7 +208,7 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 	//defer cancelFunc()
 
 	var clientRelayErr error
-	lcr.stream, clientRelayErr = client.Relay(ctx)
+	lcr.Stream, clientRelayErr = client.Relay(ctx)
 
 	if clientRelayErr != nil {
 		log.Error("error attempting to open stream to client.Relay",
@@ -222,7 +222,7 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 // Send -
 func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 	//combine with sourceMessage
-	msg := buildResult(lcr.sourceMessage, bm)
+	msg := buildResult(lcr.SourceMessage, bm)
 	ctx := lcr.traceContext
 
 	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
@@ -231,7 +231,7 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
 
-	if err := lcr.stream.Send(msg); err != nil {
+	if err := lcr.Stream.Send(msg); err != nil {
 		log.Error("error sending", zap.String("error", err.Error()))
 
 		return NewSendingError(err)
@@ -245,7 +245,7 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 func (lcr *LinkerClientRelay) SendWithError(err error) error {
 	log.Debug("SendWithError", zap.Error(err))
 
-	msg := lcr.sourceMessage
+	msg := lcr.SourceMessage
 	ctx := lcr.traceContext
 
 	switch error := err.(type) {
@@ -263,7 +263,7 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 		log.Error("error encoding tracing context", zap.Error(err))
 	}
 
-	if err := lcr.stream.Send(msg); err != nil {
+	if err := lcr.Stream.Send(msg); err != nil {
 		log.Error("error sending",
 			zap.String("error", err.Error()),
 		)
@@ -282,7 +282,7 @@ func (lcr *LinkerClientRelay) CloseSend() {
 		go func() {
 			log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
 			for {
-				_, err := lcr.stream.Recv()
+				_, err := lcr.Stream.Recv()
 				if err == io.EOF {
 					log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
 					close(waitc)
@@ -297,12 +297,12 @@ func (lcr *LinkerClientRelay) CloseSend() {
 				log.Debug("LinkerClientRelay, got payload receipt")
 			}
 		}()
-		lcr.stream.CloseSend()
+		lcr.Stream.CloseSend()
 
 		<-waitc
 	} else {
 		log.Debug("LinkerClientRelay.CloseSend nothing was sent, closing stream")
-		lcr.stream.CloseSend()
+		lcr.Stream.CloseSend()
 	}
 	//wait for receipt func to complete
 	log.Debug("LinkerClientRelay.CloseSend completed")

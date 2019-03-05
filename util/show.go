@@ -28,7 +28,7 @@ func Show(descr string, aceMsg *rpc.Message) {
 		log.Debugf("\tError: %s", aceMsg.ErrorType)
 		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
 	}
-	log.Debugf("\tOpentracingContext:", aceMsg.GetOpentracingContext())
+	log.Debugf("\tOpentracingContext: %s", aceMsg.GetOpentracingContext())
 	if aceMsg.BusinessMessage != nil {
 		showMetadata("\t business", aceMsg.BusinessMessage.GetMetaData())
 		if aceMsg.BusinessMessage.Payload != nil {
