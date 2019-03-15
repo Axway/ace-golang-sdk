@@ -124,7 +124,7 @@ var (
 func (link Link) OnRelay(aceMessage *rpc.Message) {
 	util.Show("linker.onRelay msg:", aceMessage)
 
-	ctxWithSpan := tracing.IssueTrace(aceMessage.GetOpentracingContext(), "agent message receive", aceMessage.UUID, aceMessage.Parent_UUID)
+	ctxWithSpan := tracing.IssueTrace(aceMessage, "agent message receive")
 
 	switch msgProcessor := link.MsgProcessor.(type) {
 	case BusinessMessageProcessor:
@@ -139,10 +139,9 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
 			tracing.IssueErrorTrace(
-				aceMessage.GetOpentracingContext(),
+				aceMessage,
 				err,
-				"error processing business message",
-				aceMessage.UUID, aceMessage.Parent_UUID)
+				"error processing business message")
 
 			switch error := err.(type) {
 			case rpcclient.SendingError: // log it as we don't want to send again
