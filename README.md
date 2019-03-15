@@ -2,7 +2,7 @@
 
 ACE SDK allows developers to implement microservices that can be used as executable step in a choreography.
 
-# Service Implemenation using the SDK
+# Service Implemenation and Using the SDK
 ## Implement the callback method
 
 ### The callback method signature
@@ -14,11 +14,11 @@ Implement the callback method that will process the received message. Below is t
 
 ### Input processing
 
-The businessMsg parameter of type messaging.BusinessMessage identifies the business message and holds the payload and the metadata associated with the payload. 
+The businessMsg parameter of type messaging.BusinessMessage identifies the business message and holds the payload and the metadata associated with the payload.
 
 #### Processing payload
 
-The payload can be retrieived using the interface method GetPayload() on businessMsg object. 
+The payload can be retrieived using the interface method GetPayload() on businessMsg object.
 
 The payload [type messaging.Payload] can be actual payload (use messaging.Payload.GetBody() to retrieve the content) or a reference to a location (use messaging.Payload.GetLocationReference() to identify if the payload body is location reference)
 
@@ -27,38 +27,38 @@ The payload [type messaging.Payload] can be actual payload (use messaging.Payloa
 The metadata can be retrieved using the interface method GetMetaData() on businessMsg object which returns map of string key/value pairs identifying the metadata associated with the payload.
 
 ### Output processing
-The output of the processing can be responded by generating new message(s). To create a new message construct business message and setup metadata. The new message can then be produced using clientRelay parameter. 
+The output of the processing can be responded by generating new message(s). To create a new message construct business message and setup metadata. The new message can then be produced using clientRelay parameter.
 
 #### Creating new ACE business message
 - Construct the metadata
 
-    Constructing the metadata is done by setting up a map of string key/value pairs
+  Constructing the metadata is done by setting up a map of string key/value pairs
 
 - Contruct the payload
 
-    Create the payload with content as demonstrated below. The newContent in the example below is a byte array holding the raw content
-    ```
-            newPayload := messaging.Payload{Body: newContent}
-    ```
+  Create the payload with content as demonstrated below. The newContent in the example below is a byte array holding the raw content
+  ```
+          newPayload := messaging.Payload{Body: newContent}
+  ```
 
-    OR
+  OR
 
-    Create the payload with location reference as demonstrated below. The newContent in the example below is a byte array holding the the location reference.
-    ```
-            newPayload := messaging.Payload{Body: newContent, LocationReference: true}
-    ```
+  Create the payload with location reference as demonstrated below. The newContent in the example below is a byte array holding the the location reference.
+  ```
+          newPayload := messaging.Payload{Body: newContent, LocationReference: true}
+  ```
 
 - Construct the ACE business message
 
-    Create new business message object as demonstrated below. The "newMetadata" and "newPayload" in the example below identifies the metadata and payload for the new business message
-    ```
-        newBusinessMsg := messaging.BusinessMessage{ MetaData: newMetadata, Payload: &newPayload}
-    ```
+  Create new business message object as demonstrated below. The "newMetadata" and "newPayload" in the example below identifies the metadata and payload for the new business message
+  ```
+      newBusinessMsg := messaging.BusinessMessage{ MetaData: newMetadata, Payload: &newPayload}
+  ```
 
 #### Producing message
 To produce messages use the Send method on msgProducer parameter as demostrated below
 ```
-    msgProducer.Send(ctx, &newBusinessMsg)
+    msgProducer.Send(&newBusinessMsg)
 ```
 
 ## Add trace for service execution (Optional)
@@ -72,9 +72,22 @@ span.LogFields(opentractingLog.String("event", "processed message"))
 span.Finish()
 ```
 
-Note: When creating a new span, make sure to return the new created context back while producing the messages(if any) thru SDK using the Send method as demonstrated below
+## Handling errors in the service execution
+ACE SDK had three error types defined.
+
+SendingError - Can be returned from calling send method on the MsgProducer.
 ```
-    msgProducer.Send(ctxWithSpan, &newBusinessMsg)
+    error := msgProducer.Send(&newBusinessMsg)
+```
+
+ProcessingError - Returned by the BusinessMessageProcessor.
+```
+	return linker.NewProcessingError(fmt.Errorf("processing error)"))
+```
+
+SystemError - Returned by the BusinessMessageProcessor to clientRelay.
+```
+	return linker.NewSystemError(fmt.Errorf("system error)"))
 ```
 
 ## Register the service callback method with ACE
@@ -83,7 +96,7 @@ The service registration needs following details
 - Service Name
 - Service Version
 - Service Description
-- Callback method 
+- Callback method
 
 Below is an example of Registering the service info & callback method and then starting the ACE processing
 ```
@@ -93,6 +106,6 @@ aceAgent.Start()
 ```
 
 The provided template reads the serviceName, serviceVersion and serviceDescription from following environment variables respectively, but its the implemenation choice on how to setup these details.
-    - SERVICE_NAME
-    - SERVICE_VERSION
-    - SERVICE_DESCRIPTION
+- SERVICE_NAME
+- SERVICE_VERSION
+- SERVICE_DESCRIPTION

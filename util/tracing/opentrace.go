@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/Axway/ace-golang-sdk/rpc"
 	"github.com/Axway/ace-golang-sdk/util/logging"
 	"github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -167,28 +168,33 @@ func spanFromMetadataOrNew(openTracingContext, msg string) (Tracer, context.Cont
 }
 
 // IssueTrace -
-func IssueTrace(openTracingContext, eventMsg, uuid, parentUUID string) context.Context {
-	trace, ctxWithSpan := spanFromMetadataOrNew(openTracingContext, eventMsg)
+func IssueTrace(aceMsg *rpc.Message, eventMsg string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(aceMsg.GetOpentracingContext(), eventMsg)
 
 	trace.LogStringField("event", eventMsg)
-	trace.LogStringField("message.UUID", uuid)
-	trace.LogStringField("message.Parent_UUID", parentUUID)
+	traceIds(trace, aceMsg)
 	trace.Finish()
 
 	return ctxWithSpan
 }
 
 // IssueErrorTrace -
-func IssueErrorTrace(opentracingContext string, err error, msg, uuid, parentUUID string) context.Context {
-	trace, ctxWithSpan := spanFromMetadataOrNew(opentracingContext, "error")
+func IssueErrorTrace(aceMsg *rpc.Message, err error, eventMsg string) context.Context {
+	trace, ctxWithSpan := spanFromMetadataOrNew(aceMsg.GetOpentracingContext(), "error")
 
 	trace.LogErrorField("error", err)
-	trace.LogStringField("error-info", msg)
-	trace.LogStringField("message.UUID", uuid)
-	trace.LogStringField("message.Parent_UUID", parentUUID)
+	trace.LogStringField("error-info", eventMsg)
+	traceIds(trace, aceMsg)
 	trace.Finish()
 
 	return ctxWithSpan
+}
+
+func traceIds(trace Tracer, aceMsg *rpc.Message) {
+	trace.LogStringField("ChoreographyId", aceMsg.GetCHN_UUID())
+	trace.LogStringField("ChoreographyExecutionId", aceMsg.GetCHX_UUID())
+	trace.LogStringField("message.UUID", aceMsg.GetUUID())
+	trace.LogStringField("message.Parent_UUID", aceMsg.GetParent_UUID())
 }
 
 // TraceLogging -
