@@ -318,7 +318,7 @@ func buildResult(parentMsg *rpc.Message, bm *messaging.BusinessMessage) *rpc.Mes
 	// then set/change to reflect it's a child
 	msg.Parent_UUID = parentMsg.GetUUID()
 	msg.Pattern = &copyStepPattern
-	msg.BusinessMessage = bm
+	msg.BusinessMessage = append(msg.BusinessMessage, bm)
 	return msg
 }
 
