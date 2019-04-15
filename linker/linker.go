@@ -136,7 +136,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		defer func() {
 			clientRelay.CloseSend()
 		}()
-		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
+		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage()[0], clientRelay)
 		if err != nil {
 			tracing.IssueErrorTrace(
 				aceMessage,
