@@ -29,13 +29,15 @@ func Show(descr string, aceMsg *rpc.Message) {
 		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
 	}
 	log.Debugf("\tOpentracingContext: %s", aceMsg.GetOpentracingContext())
-	if aceMsg.BusinessMessage != nil {
-		showMetadata("\t business", aceMsg.BusinessMessage.GetMetaData())
-		if aceMsg.BusinessMessage.Payload != nil {
-			log.Debugf("\tBusinessMessage.Payload.Body (as string): '%s'", string(aceMsg.BusinessMessage.Payload.Body))
+	if len(aceMsg.BusinessMessage) > 0 {
+		for _, businessMessage := range aceMsg.BusinessMessage {
+			showMetadata("\t business", businessMessage.GetMetaData())
+			if businessMessage.Payload != nil {
+				log.Debugf("\tBusinessMessage.Payload.Body (as string): '%s'", string(businessMessage.Payload.Body))
+			}
 		}
 	} else {
-		log.Debugf("\tBusinessMessage: %v", aceMsg.BusinessMessage)
+		log.Debugf("\tBusinessMessages: []")
 	}
 	log.Debug()
 }
