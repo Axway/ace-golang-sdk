@@ -36,5 +36,11 @@ func CopyMessage(source *rpc.Message) *rpc.Message {
 		msg.ErrorDescription = source.GetErrorDescription()
 	}
 
+	// Copy over the MetaData
+	msg.MetaData = make(map[string]string)
+	for key, val := range source.MetaData {
+		msg.MetaData[key] = val
+	}
+
 	return &msg
 }

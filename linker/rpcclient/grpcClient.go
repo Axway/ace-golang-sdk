@@ -315,6 +315,19 @@ func buildResult(parentMsg *rpc.Message, bm *messaging.BusinessMessage) *rpc.Mes
 	copyStepPattern := rpc.StepPattern{}
 	copyPattern(&copyStepPattern, parentMsg.Pattern)
 
+	// Copy over the BusinessMessage MetaData, do not overwrite new values
+	for _, bmsg := range parentMsg.GetBusinessMessage() {
+		for key, value := range bmsg.GetMetaData() {
+			if bm.GetMetaData() == nil {
+				bm.MetaData = make(map[string]string)
+			}
+			if _, ok := bm.GetMetaData()[key]; !ok {
+				// key was not in map, add it
+				bm.MetaData[key] = value
+			}
+		}
+	}
+
 	// then set/change to reflect it's a child
 	msg.Parent_UUID = parentMsg.GetUUID()
 	msg.Pattern = &copyStepPattern
