@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 
 	"github.com/Axway/ace-golang-sdk/rpc"
 	"github.com/Axway/ace-golang-sdk/util"
@@ -81,6 +82,15 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 			)
 			if last != nil {
 				last.SequenceUpperBound = msgCount
+				if msgCount > 1 {
+					if last.GetMetaData() == nil {
+						last.MetaData = make(map[string]string)
+					}
+					// If more than one message has been sent from the service set the SequenceUUID to the ParentUUID
+					last.MetaData["SequenceUUID"] = last.GetParent_UUID()
+					last.MetaData["SequenceTerm"] = strconv.Itoa(int(msgCount))
+					last.MetaData["SequenceUpperBound"] = strconv.Itoa(int(msgCount))
+				}
 				s.OnRelayComplete(last)
 			} else {
 				log.Fatal(fmt.Sprintf("Relay [%s]: at io.EOF, it is expected to have at least one message:%v\n", s.Name, last))
@@ -117,6 +127,14 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 			)
 
 			if last != nil {
+				if msgCount > 1 {
+					if last.GetMetaData() == nil {
+						last.MetaData = make(map[string]string)
+					}
+					// If more than one message has been sent from the service set the SequenceUUID to the ParentUUID
+					last.MetaData["SequenceUUID"] = last.GetParent_UUID()
+					last.MetaData["SequenceTerm"] = strconv.Itoa(int(last.GetSequenceTerm()))
+				}
 				s.OnRelay(last)
 			}
 			last = msg
