@@ -25,6 +25,7 @@ type AceLinkerConfig struct {
 	ServiceName        string `cfg:"SERVICE_NAME"`
 	ServiceVersion     string `cfg:"SERVICE_VERSION"`
 	ServiceDescription string `cfg:"SERVICE_DESCRIPTION"`
+	ServiceType        string `cfg:"SERVICE_TYPE"`
 }
 
 // RPCClient .
@@ -52,6 +53,7 @@ type Link struct {
 	name         string
 	version      string
 	description  string
+	serviceType  string
 	MsgProcessor interface{}
 	client       RPCClient
 }
@@ -66,10 +68,10 @@ type MsgProducer interface {
 }
 
 // BusinessMessageProcessor type of 'business' function used to process paylod relayed to Linker
-type BusinessMessageProcessor func(context.Context, *messaging.BusinessMessage, MsgProducer) error
+type BusinessMessageProcessor func(context.Context, []*messaging.BusinessMessage, MsgProducer) error
 
 // Register -Registers the business service with linker
-func Register(name, version, description string, fn BusinessMessageProcessor) (*Link, error) {
+func Register(name, version, description, serviceType string, fn BusinessMessageProcessor) (*Link, error) {
 	if link != nil {
 		return link, fmt.Errorf("Service registration already initialized")
 	}
@@ -84,6 +86,7 @@ func Register(name, version, description string, fn BusinessMessageProcessor) (*
 	link.name = name
 	link.version = version
 	link.description = description
+	link.serviceType = serviceType
 	link.MsgProcessor = fn
 
 	if len(link.name) == 0 {
@@ -136,7 +139,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		defer func() {
 			clientRelay.CloseSend()
 		}()
-		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage()[0], clientRelay)
+		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
 			tracing.IssueErrorTrace(
 				aceMessage,
@@ -185,7 +188,7 @@ func (link Link) Start() {
 		OnRelay:                link.OnRelay,
 		OnRelayComplete:        link.onRelayComplete,
 		OnRegistrationComplete: link.OnSidecarRegistrationComplete,
-		Name:                   fmt.Sprintf("%s-%s", link.name, link.version),
+		Name: fmt.Sprintf("%s-%s", link.name, link.version),
 	}
 
 	log.Info("Starting linker and registering it with sidecar",
@@ -226,6 +229,7 @@ func (link Link) registerWithSidecar() (bool, error) {
 		ServiceName:        link.name,
 		ServiceVersion:     link.version,
 		ServiceDescription: link.description,
+		ServiceType:        rpc.ServiceInfo_ServiceType(rpc.ServiceInfo_ServiceType_value[link.serviceType]),
 		ServiceHost:        link.cfg.ServerHost,
 		ServicePort:        uint32(link.cfg.ServerPort),
 	}
