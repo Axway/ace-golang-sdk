@@ -24,6 +24,7 @@ func Show(descr string, aceMsg *rpc.Message) {
 
 	log.Debugf("\tTopicName: '%s'", aceMsg.GetTopicName())
 	log.Debugf("\tID: '%s'", aceMsg.GetConsumption_ID())
+	showMetadata("\t ", aceMsg.GetMetaData())
 	if aceMsg.ErrorType != rpc.Message_NONE {
 		log.Debugf("\tError: %s", aceMsg.ErrorType)
 		log.Debugf("\tError description: %s", aceMsg.GetErrorDescription())
