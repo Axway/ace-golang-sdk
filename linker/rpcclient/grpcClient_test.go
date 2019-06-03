@@ -104,7 +104,7 @@ func TestBuildResult(t *testing.T) {
 		t.Errorf("Pattern should have been copied")
 	}
 
-	if string(copy.BusinessMessage.Payload.Body) != "test" {
+	if string(copy.BusinessMessage[0].Payload.Body) != "test" {
 		t.Errorf("Business message should have been copied")
 	}
 }
