@@ -41,7 +41,7 @@ pipeline {
                         -Dsonar.projectBaseDir=${GOPATH}/src/github.com/Axway/ace-golang-sdk \
                         -Dsonar.sources=. \
                         -Dsonar.tests=. \
-                        -Dsonar.exclusions=**/messaging/*.go, **/rpc/*.go,**/vendor/** \
+                        -Dsonar.exclusions=**/messaging/*.go,**/rpc/*.go,**/vendor/** \
                         -Dsonar.coverage.exclusions=**/messaging/*.go,**/rpc/*.go,**/vendor/** \
                         -Dsonar.test.inclusions=**/*test*.go \
                         -Dsonar.go.tests.reportPaths=$GOPATH/src/github.com/Axway/ace-golang-sdk/goreport.json \
