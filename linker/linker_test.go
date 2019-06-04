@@ -15,8 +15,8 @@ import (
 
 var testProcBusMsg *messaging.BusinessMessage
 
-func testProc(c context.Context, bm *messaging.BusinessMessage, mp MsgProducer) error {
-	testProcBusMsg = bm
+func testProc(c context.Context, bm []*messaging.BusinessMessage, mp MsgProducer) error {
+	testProcBusMsg = bm[0]
 	return nil
 }
 
@@ -25,8 +25,9 @@ func TestRegister(t *testing.T) {
 	testServiceName := "test-service"
 	testServiceVersion := "test-version"
 	testDescription := "test-descr"
+	serviceType := "NATIVE"
 
-	link, err := Register(testServiceName, testServiceVersion, testDescription, testProc)
+	link, err := Register(testServiceName, testServiceVersion, testDescription, serviceType, testProc)
 
 	if link == nil && err != nil {
 		t.Errorf("did not expect error from call to Register with valid parameters")
@@ -146,10 +147,10 @@ func TestOnRelayNoErrors(t *testing.T) {
 			ServiceName:    "abc",
 			ServiceVersion: "1.0.0",
 		},
-		BusinessMessage: &messaging.BusinessMessage{
+		BusinessMessage: []*messaging.BusinessMessage{&messaging.BusinessMessage{
 			Payload: &messaging.Payload{
 				Body: []byte("test"),
-			},
+			}},
 		},
 		Consumption_ID: thisConsumptionID,
 	}
@@ -167,14 +168,14 @@ func TestOnRelayNoErrors(t *testing.T) {
 	if string(testProcBusMsg.Payload.Body) != "test" {
 		t.Errorf("testProc function should have been called with BusinessMessage.Payload.Body: %v but got %v", []byte("test"), testProcBusMsg.Payload.Body)
 	}
-	if sentMessage != nil {
+	if sentMessage == nil || len(sentMessage.BusinessMessage) > 1 || sentMessage.BusinessMessage[0].Payload.Body != nil {
 		t.Errorf("BusinessMessageProcessor function is normally responsible for calling Stream.Send and since we did not set testProc to do that, " +
 			"non-null sentMessage indicates a condition of incorrect setup")
 	}
 }
 
-func testProcReturnProcessingError(c context.Context, bm *messaging.BusinessMessage, mp MsgProducer) error {
-	testProcBusMsg = bm
+func testProcReturnProcessingError(c context.Context, bm []*messaging.BusinessMessage, mp MsgProducer) error {
+	testProcBusMsg = bm[0]
 	return NewProcessingError(errors.New("test-processing-error"))
 }
 func TestOnRelayProcessingError(t *testing.T) {
@@ -192,10 +193,10 @@ func TestOnRelayProcessingError(t *testing.T) {
 			ServiceName:    "abc",
 			ServiceVersion: "1.0.0",
 		},
-		BusinessMessage: &messaging.BusinessMessage{
+		BusinessMessage: []*messaging.BusinessMessage{&messaging.BusinessMessage{
 			Payload: &messaging.Payload{
 				Body: []byte("test"),
-			},
+			}},
 		},
 		Consumption_ID: thisConsumptionID,
 	}
