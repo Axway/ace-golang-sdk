@@ -225,10 +225,12 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 	msg := buildResult(lcr.SourceMessage, bm)
 	ctx := lcr.traceContext
 
-	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-		msg.OpentracingContext = b64
-	} else { //log it and continue
-		log.Error("error encoding tracing context", zap.Error(err))
+	if ctx != nil {
+		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
+			msg.OpentracingContext = b64
+		} else { //log it and continue
+			log.Error("error encoding tracing context", zap.Error(err))
+		}
 	}
 
 	if err := lcr.Stream.Send(msg); err != nil {
@@ -257,10 +259,12 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 		msg.ErrorDescription = error.Error()
 	}
 
-	if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-		msg.OpentracingContext = b64
-	} else {
-		log.Error("error encoding tracing context", zap.Error(err))
+	if ctx != nil {
+		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
+			msg.OpentracingContext = b64
+		} else {
+			log.Error("error encoding tracing context", zap.Error(err))
+		}
 	}
 
 	if err := lcr.Stream.Send(msg); err != nil {
@@ -274,37 +278,49 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 	return nil
 }
 
+// sendWithEmptyPayload - send a BusinessMessage with empty payload over grpc to the sidecar server.
+func (lcr *LinkerClientRelay) sendWithEmptyPayload() error {
+	//combine with sourceMessage
+	emptyBusinessMessage := &messaging.BusinessMessage{
+		Payload: &messaging.Payload{},
+	}
+	return lcr.Send(emptyBusinessMessage)
+}
+
 // CloseSend -
 //
 func (lcr *LinkerClientRelay) CloseSend() {
-	if lcr.sentCount > 0 {
-		waitc := make(chan struct{})
-		go func() {
-			log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
-			for {
-				_, err := lcr.Stream.Recv()
-				if err == io.EOF {
-					log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
-					close(waitc)
-					return
-				}
-				if err != nil {
-					log.Error("LinkerClientRelay, fatal error in stream.Recv",
-						zap.String("error", err.Error()),
-					)
-					return
-				}
-				log.Debug("LinkerClientRelay, got payload receipt")
-			}
-		}()
-		lcr.Stream.CloseSend()
-
-		<-waitc
-	} else {
-		log.Debug("LinkerClientRelay.CloseSend nothing was sent, closing stream")
-		lcr.Stream.CloseSend()
+	if lcr.sentCount == 0 {
+		// Send empty message for next child service
+		if err := lcr.sendWithEmptyPayload(); err != nil {
+			log.Error("Error closing stream with no messages",
+				zap.String("error", err.Error()),
+			)
+		}
 	}
-	//wait for receipt func to complete
+
+	waitc := make(chan struct{})
+	go func() {
+		log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
+		for {
+			_, err := lcr.Stream.Recv()
+			if err == io.EOF {
+				log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
+				close(waitc)
+				return
+			}
+			if err != nil {
+				log.Error("LinkerClientRelay, fatal error in stream.Recv",
+					zap.String("error", err.Error()),
+				)
+				return
+			}
+			log.Debug("LinkerClientRelay, got payload receipt")
+		}
+	}()
+	lcr.Stream.CloseSend()
+
+	<-waitc
 	log.Debug("LinkerClientRelay.CloseSend completed")
 }
 
