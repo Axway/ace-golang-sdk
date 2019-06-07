@@ -27,9 +27,6 @@ func CopyMessage(source *rpc.Message) *rpc.Message {
 		Consumption_ID:     source.GetConsumption_ID(),
 		TopicName:          source.GetTopicName(),
 		OpentracingContext: source.GetOpentracingContext(),
-
-		//SequenceTerm:       seqTerm, TODO: sidecar will need to do that when Send indicates io.EOF
-		//SequenceUpperBound: seqUpperBound,
 	}
 	if source.ErrorType != rpc.Message_NONE {
 		msg.ErrorType = source.GetErrorType()
