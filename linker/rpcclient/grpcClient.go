@@ -16,14 +16,16 @@ import (
 	"google.golang.org/grpc"
 )
 
+const ErrMsgSending = "error sending"
+
 var log = logging.Logger()
 
 // ClientRegister makes a grpc call to Registration method on the server represented by host and port inputs
 func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (bool, error) {
 	hostInfo := fmt.Sprintf("%s:%d", host, port)
 	log.Info(fmt.Sprintf("calling Registration on: %s", hostInfo),
-		zap.String("event", "ClientRegister"),
-		zap.String("service.name", serviceInfo.ServiceName),
+		zap.String(logging.LogFieldEvent, "ClientRegister"),
+		zap.String(logging.LogFieldServiceName, serviceInfo.ServiceName),
 	)
 	gracefulStop := util.CreateSignalChannel()
 
@@ -31,9 +33,9 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	defer cancel()
 
 	go func() {
-		sig := <-gracefulStop
+		<-gracefulStop
 		cancel()
-		log.Debug("received system signal, cancelling connection...", zap.String("signal", sig.String()))
+		log.Debug("received system signal, cancelling connection...")
 	}()
 
 	opts := []grpc.DialOption{
@@ -45,7 +47,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	conn, err := grpc.DialContext(ctx, hostInfo, opts...)
 	if err != nil {
 		log.Error("cannot connect to registration server",
-			zap.String("error", err.Error()),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
@@ -54,19 +56,20 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	client := rpc.NewLinkageClient(conn)
 
 	span, ctxWithSpan := tracing.StartTraceFromContext(ctx, "ClientRegister")
-	span.LogStringField("event", "start client Registration")
-	span.LogStringField("ServiceName", serviceInfo.ServiceName)
+	span.LogStringField(logging.LogFieldEvent, "start client Registration")
+	span.LogStringField(logging.LogFieldServiceName, serviceInfo.ServiceName)
 	defer span.Finish()
 
 	_, err = client.Registration(ctxWithSpan, serviceInfo)
 	if err != nil {
 		log.Fatal("Error in client.Registration",
-			zap.String("error", err.Error()),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
-	log.Debug("received Receipt for registering",
-		zap.String("service.name", serviceInfo.ServiceName),
+	log.Debug("Received acknowledgment for registration",
+		zap.String(logging.LogFieldServiceName, serviceInfo.ServiceName),
+		zap.String(logging.LogFieldServiceVersion, serviceInfo.ServiceVersion),
 	)
 	return true, nil
 }
@@ -75,11 +78,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, port uint16) (bool, error) {
 	var hostInfo = fmt.Sprintf("%s:%d", host, port)
 
-	if spanAsBase64, err := tracing.ContextWithSpanToBase64(clientContext); err == nil {
-		msg.OpentracingContext = spanAsBase64
-	} else {
-		log.Error("error encoding tracing context", zap.Error(err))
-	}
+	assignTraceContext(msg, clientContext)
 
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
@@ -88,8 +87,9 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	conn, err := grpc.Dial(hostInfo, opts...)
 	if err != nil {
 		log.Fatal("cannot connect to relay server",
-			zap.String("host.info", hostInfo),
-			zap.String("error", err.Error()),
+			zap.String(logging.LogFieldServiceHost, host),
+			zap.Uint16(logging.LogFieldServicePort, port),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
@@ -103,7 +103,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	stream, err := client.Relay(ctx)
 	if err != nil {
 		log.Error("error attempting to open stream to client.Relay",
-			zap.String("error", err.Error()),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
@@ -120,7 +120,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 			}
 			if err != nil {
 				log.Error("ClientRelay, error in stream.Recv",
-					zap.Error(err),
+					zap.String(logging.LogFieldError, err.Error()),
 				)
 				return
 			}
@@ -129,13 +129,13 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 	}()
 
 	if err := stream.Send(msg); err != nil {
-		log.Error("error sending",
-			zap.Error(err),
+		log.Error(ErrMsgSending,
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
 	log.Debug("sent message, closing stream",
-		zap.String("msg.UUID", msg.UUID),
+		zap.String(logging.LogFieldMessageID, msg.UUID),
 	)
 	stream.CloseSend()
 
@@ -186,8 +186,9 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 	conn, err := grpc.Dial(hostInfo, opts...)
 	if err != nil {
 		log.Error("cannot connect to server",
-			zap.String("host.info", hostInfo),
-			zap.String("error", err.Error()),
+			zap.String(logging.LogFieldSidecarHost, host),
+			zap.Uint16(logging.LogFieldSidecarPort, port),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return err
 	}
@@ -212,11 +213,20 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 
 	if clientRelayErr != nil {
 		log.Error("error attempting to open stream to client.Relay",
-			zap.String("error", clientRelayErr.Error()),
+			zap.String(logging.LogFieldError, clientRelayErr.Error()),
 		)
 		return clientRelayErr
 	}
 	return nil
+}
+func assignTraceContext(msg *rpc.Message, ctx context.Context) {
+	if ctx != nil {
+		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
+			msg.OpentracingContext = b64
+		} else {
+			log.Error("error encoding tracing context", zap.String(logging.LogFieldError, err.Error()))
+		}
+	}
 }
 
 // Send -
@@ -225,16 +235,10 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 	msg := buildResult(lcr.SourceMessage, bm)
 	ctx := lcr.traceContext
 
-	if ctx != nil {
-		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-			msg.OpentracingContext = b64
-		} else { //log it and continue
-			log.Error("error encoding tracing context", zap.Error(err))
-		}
-	}
+	assignTraceContext(msg, ctx)
 
 	if err := lcr.Stream.Send(msg); err != nil {
-		log.Error("error sending", zap.String("error", err.Error()))
+		log.Error(ErrMsgSending, zap.String(logging.LogFieldError, err.Error()))
 
 		return NewSendingError(err)
 	}
@@ -245,7 +249,7 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 
 // SendWithError -
 func (lcr *LinkerClientRelay) SendWithError(err error) error {
-	log.Debug("SendWithError", zap.Error(err))
+	log.Debug("SendWithError", zap.String(logging.LogFieldError, err.Error()))
 
 	msg := lcr.SourceMessage
 	ctx := lcr.traceContext
@@ -259,17 +263,11 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 		msg.ErrorDescription = error.Error()
 	}
 
-	if ctx != nil {
-		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
-			msg.OpentracingContext = b64
-		} else {
-			log.Error("error encoding tracing context", zap.Error(err))
-		}
-	}
+	assignTraceContext(msg, ctx)
 
 	if err := lcr.Stream.Send(msg); err != nil {
-		log.Error("error sending",
-			zap.String("error", err.Error()),
+		log.Error(ErrMsgSending,
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return err
 	}
@@ -294,7 +292,7 @@ func (lcr *LinkerClientRelay) CloseSend() {
 		// Send empty message for next child service
 		if err := lcr.sendWithEmptyPayload(); err != nil {
 			log.Error("Error closing stream with no messages",
-				zap.String("error", err.Error()),
+				zap.String(logging.LogFieldError, err.Error()),
 			)
 		}
 	}
@@ -311,7 +309,7 @@ func (lcr *LinkerClientRelay) CloseSend() {
 			}
 			if err != nil {
 				log.Error("LinkerClientRelay, fatal error in stream.Recv",
-					zap.String("error", err.Error()),
+					zap.String(logging.LogFieldError, err.Error()),
 				)
 				return
 			}

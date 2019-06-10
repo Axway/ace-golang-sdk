@@ -22,6 +22,7 @@ import (
 const (
 	// OpentracingContext const
 	OpentracingContext string = "opentracingContext"
+	traceLogMsg               = "tracing"
 )
 
 // set it via configuration
@@ -265,21 +266,21 @@ func (s TraceSpan) LogErrorField(key string, value error) {
 
 // LogStringField - TraceLog implementation of Tracer interface method
 func (l TraceLog) LogStringField(key, value string) {
-	l.logger.Info("tracing",
+	l.logger.Info(traceLogMsg,
 		zap.String(key, value),
 	)
 }
 
 // LogIntField is TraceLog implementation of Tracer interface
 func (l TraceLog) LogIntField(key string, value int) {
-	l.logger.Info("tracing",
+	l.logger.Info(traceLogMsg,
 		zap.Int(key, value),
 	)
 }
 
 // LogErrorField is TraceLog implementation of Tracer interface
 func (l TraceLog) LogErrorField(key string, value error) {
-	l.logger.Error("tracing",
+	l.logger.Error(traceLogMsg,
 		zap.Error(value),
 	)
 }

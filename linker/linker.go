@@ -133,7 +133,7 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 	case BusinessMessageProcessor:
 		clientRelay, buildErr := link.client.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
-			log.Fatal("agent unable to BuildClientRelay", zap.Error(buildErr))
+			log.Fatal("agent unable to BuildClientRelay", zap.String(logging.LogFieldError, buildErr.Error()))
 			return
 		}
 		defer func() {
@@ -148,10 +148,10 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 
 			switch error := err.(type) {
 			case rpcclient.SendingError: // log it as we don't want to send again
-				log.Error("SendingError", zap.Error(fmt.Errorf(error.Error())))
+				log.Error("SendingError", zap.String(logging.LogFieldError, error.Error()))
 			default:
 				clientRelay.SendWithError(error)
-				log.Error("message processor error", zap.Error(err))
+				log.Error("message processor error", zap.String(logging.LogFieldError, err.Error()))
 			}
 		}
 	default:
@@ -164,12 +164,12 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 // OnSidecarRegistrationComplete can perform Linker-specific post registration actions
 func (link Link) OnSidecarRegistrationComplete(serviceInfo *rpc.ServiceInfo) error {
 	log.Info("linker OnSidecarRegistrationComplete",
-		zap.String("sidecar ID", serviceInfo.GetServiceName()),
+		zap.String(logging.LogFieldSidecarID, serviceInfo.GetServiceName()),
 	)
 
 	if ok, err := link.registerWithSidecar(); !ok {
 		log.Fatal("unable to register agent in response to sidecar registration",
-			zap.Error(err),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return err
 	}
@@ -188,16 +188,16 @@ func (link Link) Start() {
 		OnRelay:                link.OnRelay,
 		OnRelayComplete:        link.onRelayComplete,
 		OnRegistrationComplete: link.OnSidecarRegistrationComplete,
-		Name: fmt.Sprintf("%s-%s", link.name, link.version),
+		Name:                   fmt.Sprintf("%s-%s", link.name, link.version),
 	}
 
 	log.Info("Starting linker and registering it with sidecar",
-		zap.String("link.name", link.name),
-		zap.String("link.version", link.version),
-		zap.String("link.cfg.ServerHost", link.cfg.ServerHost),
-		zap.Uint16("link.cfg.ServerPort", link.cfg.ServerPort),
-		zap.String("sidecar.host", sidecarHost),
-		zap.Uint16("sidecar.port", sidecarPort),
+		zap.String(logging.LogFieldServiceName, link.name),
+		zap.String(logging.LogFieldServiceVersion, link.version),
+		zap.String(logging.LogFieldServiceHost, link.cfg.ServerHost),
+		zap.Uint16(logging.LogFieldServicePort, link.cfg.ServerPort),
+		zap.String(logging.LogFieldSidecarHost, sidecarHost),
+		zap.Uint16(logging.LogFieldSidecarPort, sidecarPort),
 	)
 
 	waitc := make(chan struct{})
@@ -208,7 +208,7 @@ func (link Link) Start() {
 
 	if ok, err := link.registerWithSidecar(); !ok {
 		log.Fatal("unable to Start agent",
-			zap.Error(err),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 	}
 
@@ -235,7 +235,7 @@ func (link Link) registerWithSidecar() (bool, error) {
 	}
 	if ok, err := link.client.ClientRegister(sidecarHost, sidecarPort, &serviceInfo); !ok {
 		log.Error("ClientRegistration of agent error",
-			zap.Error(err),
+			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
 	}
