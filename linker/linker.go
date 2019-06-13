@@ -11,7 +11,6 @@ import (
 	"github.com/Axway/ace-golang-sdk/linker/rpcserver"
 	"github.com/Axway/ace-golang-sdk/messaging"
 	"github.com/Axway/ace-golang-sdk/rpc"
-	"github.com/Axway/ace-golang-sdk/util"
 	"github.com/Axway/ace-golang-sdk/util/logging"
 	"github.com/Axway/ace-golang-sdk/util/tracing"
 )
@@ -125,33 +124,43 @@ var (
 // OnRelay Server method implements linker's role in message processing; it applies business function fn
 // specified at Linker's creation
 func (link Link) OnRelay(aceMessage *rpc.Message) {
-	util.Show("linker.onRelay msg:", aceMessage)
-
-	ctxWithSpan := tracing.IssueTrace(aceMessage, "agent message receive")
+	ctxWithSpan := tracing.IssueTrace(aceMessage, "Agent message receive")
 
 	switch msgProcessor := link.MsgProcessor.(type) {
 	case BusinessMessageProcessor:
 		clientRelay, buildErr := link.client.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
 		if buildErr != nil {
-			log.Fatal("agent unable to BuildClientRelay", zap.String(logging.LogFieldError, buildErr.Error()))
+			log.Fatal("Unable to initialize relay client", zap.String(logging.LogFieldError, buildErr.Error()))
 			return
 		}
+		log.Debug("Relay client created, executing service callback to process message",
+			zap.String(logging.LogFieldChoreographyID, aceMessage.GetCHN_UUID()),
+			zap.String(logging.LogFieldExecutionID, aceMessage.GetCHX_UUID()),
+			zap.String(logging.LogFieldMessageID, aceMessage.GetUUID()),
+			zap.String(logging.LogFieldParentMessageID, aceMessage.GetParent_UUID()))
+
 		defer func() {
+			log.Info("Service callback execution completed",
+				zap.String(logging.LogFieldChoreographyID, aceMessage.GetCHN_UUID()),
+				zap.String(logging.LogFieldExecutionID, aceMessage.GetCHX_UUID()),
+				zap.String(logging.LogFieldMessageID, aceMessage.GetUUID()),
+				zap.String(logging.LogFieldParentMessageID, aceMessage.GetParent_UUID()))
 			clientRelay.CloseSend()
 		}()
+
 		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
 		if err != nil {
 			tracing.IssueErrorTrace(
 				aceMessage,
 				err,
-				"error processing business message")
+				"Error processing business message")
 
 			switch error := err.(type) {
 			case rpcclient.SendingError: // log it as we don't want to send again
 				log.Error("SendingError", zap.String(logging.LogFieldError, error.Error()))
 			default:
 				clientRelay.SendWithError(error)
-				log.Error("message processor error", zap.String(logging.LogFieldError, err.Error()))
+				log.Error("Error in message processing", zap.String(logging.LogFieldError, err.Error()))
 			}
 		}
 	default:
@@ -163,17 +172,20 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 
 // OnSidecarRegistrationComplete can perform Linker-specific post registration actions
 func (link Link) OnSidecarRegistrationComplete(serviceInfo *rpc.ServiceInfo) error {
-	log.Info("linker OnSidecarRegistrationComplete",
+	log.Info("Processing sidecar registration",
 		zap.String(logging.LogFieldSidecarID, serviceInfo.GetServiceName()),
 	)
 
 	if ok, err := link.registerWithSidecar(); !ok {
-		log.Fatal("unable to register agent in response to sidecar registration",
+		log.Fatal("Unable to register agent in response to sidecar registration",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return err
 	}
 
+	log.Info("Sidecar registration completed",
+		zap.String(logging.LogFieldSidecarID, serviceInfo.GetServiceName()),
+	)
 	return nil
 }
 
@@ -191,7 +203,7 @@ func (link Link) Start() {
 		Name:                   fmt.Sprintf("%s-%s", link.name, link.version),
 	}
 
-	log.Info("Starting linker and registering it with sidecar",
+	log.Info("Starting agent and registering it with sidecar",
 		zap.String(logging.LogFieldServiceName, link.name),
 		zap.String(logging.LogFieldServiceVersion, link.version),
 		zap.String(logging.LogFieldServiceHost, link.cfg.ServerHost),
@@ -207,7 +219,7 @@ func (link Link) Start() {
 	}()
 
 	if ok, err := link.registerWithSidecar(); !ok {
-		log.Fatal("unable to Start agent",
+		log.Fatal("Unable to start agent",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 	}
@@ -233,8 +245,16 @@ func (link Link) registerWithSidecar() (bool, error) {
 		ServiceHost:        link.cfg.ServerHost,
 		ServicePort:        uint32(link.cfg.ServerPort),
 	}
+
+	log.Info("Registering with sidecar",
+		zap.String(logging.LogFieldEvent, "Client register"),
+		zap.String(logging.LogFieldSidecarHost, sidecarHost),
+		zap.Uint16(logging.LogFieldSidecarPort, sidecarPort),
+		zap.String(logging.LogFieldServiceName, link.name),
+		zap.String(logging.LogFieldServiceVersion, link.version))
+
 	if ok, err := link.client.ClientRegister(sidecarHost, sidecarPort, &serviceInfo); !ok {
-		log.Error("ClientRegistration of agent error",
+		log.Error("Error in registering agent",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
