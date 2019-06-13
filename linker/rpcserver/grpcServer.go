@@ -41,19 +41,10 @@ type Server struct {
 
 // Registration implements LinkageService interface
 func (s *Server) Registration(ctx context.Context, serviceInfo *rpc.ServiceInfo) (*rpc.Receipt, error) {
-	log.Info("Registering client service",
-		zap.String(logging.LogFieldServiceName, serviceInfo.GetServiceName()),
-	)
-
-	span, _ := tracing.StartTraceFromContext(ctx, "Registration")
-	span.LogStringField("event", "Registration")
-	span.LogStringField("ServiceName", serviceInfo.ServiceName)
-	defer span.Finish()
-
 	err := s.OnRegistrationComplete(serviceInfo)
 
 	if err != nil {
-		log.Error("error in Registration", zap.String(logging.LogFieldError, err.Error()))
+		log.Error("Error in service registration", zap.String(logging.LogFieldError, err.Error()))
 		return &rpc.Receipt{
 			IsOk:  false,
 			Error: err.Error(),
@@ -64,7 +55,7 @@ func (s *Server) Registration(ctx context.Context, serviceInfo *rpc.ServiceInfo)
 
 func (s *Server) processOnRelayComplete(last *rpc.Message, msgCount uint64) {
 	//done with Recv, so if recErr == nil, sidecar will need to commit
-	log.Info(fmt.Sprintf("Relay [%s]: Done receiving total of %d messages, calling OnRelayComplete\n", s.Name, msgCount),
+	log.Debug("Message relay complete",
 		zap.String(logging.LogFieldServiceName, s.Name),
 		zap.Uint64(logging.LogFieldMessageCount, msgCount),
 	)
@@ -81,30 +72,24 @@ func (s *Server) processOnRelayComplete(last *rpc.Message, msgCount uint64) {
 		}
 		s.OnRelayComplete(last)
 	} else {
-		log.Fatal(fmt.Sprintf("Relay [%s]: at io.EOF, it is expected to have at least one message:%v\n", s.Name, last))
+		log.Fatal("Unexpected end of message stream, expected to have at least one message",
+			zap.String(logging.LogFieldServiceName, s.Name))
 	}
 }
 func (s *Server) sendReceipt(stream rpc.Linkage_RelayServer, isOK bool) {
 	var receipt = &rpc.Receipt{IsOk: isOK}
 	if err := stream.Send(receipt); err != nil {
-		log.Error("Relay: error sending receipt",
+		log.Error("Error in sending relay receipt",
 			zap.String(logging.LogFieldServiceName, s.Name),
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 	}
-	log.Debug("Relay: Done sending receipt",
+	log.Debug("Relay receipt sent",
 		zap.String(logging.LogFieldServiceName, s.Name),
 	)
 }
 
 func (s *Server) processOnRelay(msg *rpc.Message, last *rpc.Message, msgCount uint64) {
-	log.Debug("Relay: received message",
-		zap.String(logging.LogFieldServiceName, s.Name),
-		zap.String(logging.LogFieldParentMessageID, msg.Parent_UUID),
-		zap.String(logging.LogFieldMessageID, msg.UUID),
-		zap.Uint64(logging.LogFieldMessageCount, msgCount),
-	)
-
 	if last != nil {
 		if msgCount > 1 {
 			if last.GetMetaData() == nil {
@@ -121,7 +106,7 @@ func (s *Server) processOnRelay(msg *rpc.Message, last *rpc.Message, msgCount ui
 // Relay implements LinkageService interface
 func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 	// receive data from stream
-	log.Debug(fmt.Sprintf("Relay [%s]: starting Recv on stream", s.Name),
+	log.Debug("Starting to receive relay messages on stream",
 		zap.String(logging.LogFieldServiceName, s.Name),
 	)
 
@@ -134,12 +119,16 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 			s.processOnRelayComplete(last, msgCount)
 			return nil
 		} else if recErr != nil {
-			log.Error("Relay error",
+			log.Error("Error in receving relay messages",
 				zap.String(logging.LogFieldError, recErr.Error()),
 			)
 			s.OnRelayCompleteError(last, recErr)
 			return recErr
 		}
+		log.Debug("Received message to relay",
+			zap.String(logging.LogFieldServiceName, s.Name),
+			zap.String(logging.LogFieldParentMessageID, in.Parent_UUID),
+			zap.String(logging.LogFieldMessageID, in.UUID))
 
 		isOK := (recErr == nil)
 		s.sendReceipt(stream, isOK)
@@ -158,7 +147,7 @@ func (s *Server) Relay(stream rpc.Linkage_RelayServer) error {
 func StartServer(host string, port uint16, server *Server) {
 	gracefulStop := util.CreateSignalChannel()
 
-	log.Debug("Starting Server",
+	log.Debug("Starting server",
 		zap.String(logging.LogFieldServiceName, server.Name),
 		zap.String(logging.LogFieldServiceHost, host),
 		zap.Uint16(logging.LogFieldServicePort, port),
@@ -182,15 +171,15 @@ func StartServer(host string, port uint16, server *Server) {
 
 	go func() {
 		<-gracefulStop
-		log.Debug("received system signal, shutting down server...")
+		log.Debug("Received system signal, shutting down server")
 		grpcServer.GracefulStop()
 	}()
 
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatal("failed to serve",
+		log.Fatal("Failed to serve",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 	} else {
-		log.Info("server stopped")
+		log.Info("Server stopped")
 	}
 }

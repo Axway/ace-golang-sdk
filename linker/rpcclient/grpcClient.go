@@ -16,17 +16,17 @@ import (
 	"google.golang.org/grpc"
 )
 
-const ErrMsgSending = "error sending"
+// Constants
+const (
+	ErrMsgSending               = "Error in sending message"
+	ErrMsgOpenClientRelayStream = "Error attempting to open stream for client relay"
+)
 
 var log = logging.Logger()
 
 // ClientRegister makes a grpc call to Registration method on the server represented by host and port inputs
 func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (bool, error) {
 	hostInfo := fmt.Sprintf("%s:%d", host, port)
-	log.Info(fmt.Sprintf("calling Registration on: %s", hostInfo),
-		zap.String(logging.LogFieldEvent, "ClientRegister"),
-		zap.String(logging.LogFieldServiceName, serviceInfo.ServiceName),
-	)
 	gracefulStop := util.CreateSignalChannel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -35,7 +35,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 	go func() {
 		<-gracefulStop
 		cancel()
-		log.Debug("received system signal, cancelling connection...")
+		log.Debug("Received system signal, cancelling connection")
 	}()
 
 	opts := []grpc.DialOption{
@@ -46,7 +46,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 
 	conn, err := grpc.DialContext(ctx, hostInfo, opts...)
 	if err != nil {
-		log.Error("cannot connect to registration server",
+		log.Error("Error in connecting to registration server",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
@@ -55,14 +55,9 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 
 	client := rpc.NewLinkageClient(conn)
 
-	span, ctxWithSpan := tracing.StartTraceFromContext(ctx, "ClientRegister")
-	span.LogStringField(logging.LogFieldEvent, "start client Registration")
-	span.LogStringField(logging.LogFieldServiceName, serviceInfo.ServiceName)
-	defer span.Finish()
-
-	_, err = client.Registration(ctxWithSpan, serviceInfo)
+	_, err = client.Registration(context.Background(), serviceInfo)
 	if err != nil {
-		log.Fatal("Error in client.Registration",
+		log.Fatal("Error in client registration",
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
@@ -78,7 +73,7 @@ func ClientRegister(host string, port uint16, serviceInfo *rpc.ServiceInfo) (boo
 func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, port uint16) (bool, error) {
 	var hostInfo = fmt.Sprintf("%s:%d", host, port)
 
-	assignTraceContext(msg, clientContext)
+	assignTraceContext(clientContext, msg)
 
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
@@ -86,7 +81,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 	conn, err := grpc.Dial(hostInfo, opts...)
 	if err != nil {
-		log.Fatal("cannot connect to relay server",
+		log.Fatal("Error in connecting to relay server",
 			zap.String(logging.LogFieldServiceHost, host),
 			zap.Uint16(logging.LogFieldServicePort, port),
 			zap.String(logging.LogFieldError, err.Error()),
@@ -102,7 +97,7 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 	stream, err := client.Relay(ctx)
 	if err != nil {
-		log.Error("error attempting to open stream to client.Relay",
+		log.Error(ErrMsgOpenClientRelayStream,
 			zap.String(logging.LogFieldError, err.Error()),
 		)
 		return false, err
@@ -110,21 +105,18 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 
 	waitc := make(chan struct{})
 	go func() {
-		log.Debug("ClientRelay: opening stream to receive Relay receipt")
 		for {
 			_, err := stream.Recv()
 			if err == io.EOF {
-				log.Debug("ClientRelay, done receiving, EOF")
 				close(waitc)
 				return
 			}
 			if err != nil {
-				log.Error("ClientRelay, error in stream.Recv",
+				log.Error("Error in receiving client relay receipts",
 					zap.String(logging.LogFieldError, err.Error()),
 				)
 				return
 			}
-			log.Debug("ClientRelay, got payload receipt")
 		}
 	}()
 
@@ -134,16 +126,13 @@ func ClientRelay(clientContext context.Context, msg *rpc.Message, host string, p
 		)
 		return false, err
 	}
-	log.Debug("sent message, closing stream",
+	log.Debug("Sent message, closing stream",
 		zap.String(logging.LogFieldMessageID, msg.UUID),
 	)
 	stream.CloseSend()
 
-	log.Debug("waiting to receive receipt")
-
 	<-waitc
-
-	log.Debug("exiting client relay")
+	log.Debug("Received client relay receipt")
 	return true, nil
 }
 
@@ -185,7 +174,7 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 	}
 	conn, err := grpc.Dial(hostInfo, opts...)
 	if err != nil {
-		log.Error("cannot connect to server",
+		log.Error("Error in connecting to server",
 			zap.String(logging.LogFieldSidecarHost, host),
 			zap.Uint16(logging.LogFieldSidecarPort, port),
 			zap.String(logging.LogFieldError, err.Error()),
@@ -194,37 +183,33 @@ func (lcr *LinkerClientRelay) configure(clientContext context.Context, host stri
 	}
 	closeConnFunc := func() { conn.Close() }
 	lcr.deferrables = append(lcr.deferrables, closeConnFunc)
-	//replace this by closure func
-	//defer conn.Close()
 
 	client := rpc.NewLinkageClient(conn)
 
-	//ctx, cancel := context.WithCancel(context.Background())
 	ctx, cancel := context.WithCancel(clientContext)
 	cancelFunc := func() {
 		cancel()
-		log.Debug("cancelled ClientRelay receive context")
 	}
 	lcr.deferrables = append(lcr.deferrables, cancelFunc)
-	//defer cancelFunc()
 
 	var clientRelayErr error
 	lcr.Stream, clientRelayErr = client.Relay(ctx)
 
 	if clientRelayErr != nil {
-		log.Error("error attempting to open stream to client.Relay",
+		log.Error(ErrMsgOpenClientRelayStream,
 			zap.String(logging.LogFieldError, clientRelayErr.Error()),
 		)
 		return clientRelayErr
 	}
 	return nil
 }
-func assignTraceContext(msg *rpc.Message, ctx context.Context) {
+
+func assignTraceContext(ctx context.Context, msg *rpc.Message) {
 	if ctx != nil {
 		if b64, err := tracing.ContextWithSpanToBase64(ctx); err == nil {
 			msg.OpentracingContext = b64
 		} else {
-			log.Error("error encoding tracing context", zap.String(logging.LogFieldError, err.Error()))
+			log.Error("Error encoding tracing context", zap.String(logging.LogFieldError, err.Error()))
 		}
 	}
 }
@@ -235,7 +220,7 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 	msg := buildResult(lcr.SourceMessage, bm)
 	ctx := lcr.traceContext
 
-	assignTraceContext(msg, ctx)
+	assignTraceContext(ctx, msg)
 
 	if err := lcr.Stream.Send(msg); err != nil {
 		log.Error(ErrMsgSending, zap.String(logging.LogFieldError, err.Error()))
@@ -243,14 +228,12 @@ func (lcr *LinkerClientRelay) Send(bm *messaging.BusinessMessage) error {
 		return NewSendingError(err)
 	}
 	lcr.sentCount++
-	util.Show("LinkerClientRelay sent msg:\n", msg)
+	util.Show("Response message", msg)
 	return nil
 }
 
 // SendWithError -
 func (lcr *LinkerClientRelay) SendWithError(err error) error {
-	log.Debug("SendWithError", zap.String(logging.LogFieldError, err.Error()))
-
 	msg := lcr.SourceMessage
 	ctx := lcr.traceContext
 
@@ -263,7 +246,7 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 		msg.ErrorDescription = error.Error()
 	}
 
-	assignTraceContext(msg, ctx)
+	assignTraceContext(ctx, msg)
 
 	if err := lcr.Stream.Send(msg); err != nil {
 		log.Error(ErrMsgSending,
@@ -272,7 +255,7 @@ func (lcr *LinkerClientRelay) SendWithError(err error) error {
 		return err
 	}
 	lcr.sentCount++
-	util.Show("LinkerClientRelay sent msg:\n", msg)
+	util.Show("Error response message", msg)
 	return nil
 }
 
@@ -299,27 +282,23 @@ func (lcr *LinkerClientRelay) CloseSend() {
 
 	waitc := make(chan struct{})
 	go func() {
-		log.Debug("LinkerClientRelay: openining stream to receive Relay receipt(s)")
 		for {
 			_, err := lcr.Stream.Recv()
 			if err == io.EOF {
-				log.Debug("LinkerClientRelay, done receiving receipt(s), EOF")
 				close(waitc)
 				return
 			}
 			if err != nil {
-				log.Error("LinkerClientRelay, fatal error in stream.Recv",
+				log.Error("Error in receiving close messages",
 					zap.String(logging.LogFieldError, err.Error()),
 				)
 				return
 			}
-			log.Debug("LinkerClientRelay, got payload receipt")
 		}
 	}()
 	lcr.Stream.CloseSend()
 
 	<-waitc
-	log.Debug("LinkerClientRelay.CloseSend completed")
 }
 
 // UUID of the resulting message is not set, it will be set by kafka producer before placing in queue
