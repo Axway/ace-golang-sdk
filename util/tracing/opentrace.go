@@ -13,7 +13,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	opentracingLog "github.com/opentracing/opentracing-go/log"
-	jaeger "github.com/uber/jaeger-client-go"
 	jaegerconfig "github.com/uber/jaeger-client-go/config"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -22,6 +21,7 @@ import (
 const (
 	// OpentracingContext const
 	OpentracingContext string = "opentracingContext"
+	traceLogMsg               = "tracing"
 )
 
 // set it via configuration
@@ -34,6 +34,8 @@ func init() {
 	//conventional logging is 'always on'
 	trLog = &TraceLog{
 		logger: logging.Logger(),
+		msg:    traceLogMsg,
+		fields: make([]zap.Field, 0),
 	}
 }
 
@@ -46,11 +48,11 @@ func InitTracing(serviceDisplay string) TraceLogging {
 				Param: 1,
 			},
 			Reporter: &jaegerconfig.ReporterConfig{
-				LogSpans: true,
+				LogSpans: false,
 			},
 		}
 
-		tracer, closer, err := cfg.New(serviceDisplay, jaegerconfig.Logger(jaeger.StdLogger))
+		tracer, closer, err := cfg.New(serviceDisplay)
 		if err != nil {
 			panic(fmt.Sprintf("ERROR: cannot init Jaeger: %v\n", err))
 		}
@@ -102,9 +104,15 @@ func Base64ToTrace(base64str, startSpanMsg string) (Tracer, error) {
 	spanCtx, _ := tracer.Extract(opentracing.TextMap, textCarrier)
 	span := tracer.StartSpan(startSpanMsg, ext.RPCServerOption(spanCtx))
 
+	traceLogger := &TraceLog{
+		logger: logging.Logger(),
+		msg:    startSpanMsg,
+		fields: make([]zap.Field, 0),
+	}
+
 	return TraceSpan{
 			otSpan:   span,
-			traceLog: trLog,
+			traceLog: traceLogger,
 		},
 		nil
 }
@@ -143,16 +151,21 @@ func ContextWithSpan(ctx context.Context, trace Tracer) (context.Context, bool) 
 
 // StartTraceFromContext - return TraceSpan if opentracting is enabled else just TraceLog to log to file; if opentracing is enabled, we do both: opentracing and logging to file
 func StartTraceFromContext(ctx context.Context, msg string) (Tracer, context.Context) {
+	traceLogger := &TraceLog{
+		logger: logging.Logger(),
+		msg:    msg,
+	}
+
 	// is opentracing available/enabled? if so, return TraceSpan else a logger
 	if opentracingEnabled {
 		span, ctxWithSpan := opentracing.StartSpanFromContext(ctx, msg)
 
 		return TraceSpan{
 			otSpan:   span,
-			traceLog: trLog,
+			traceLog: traceLogger,
 		}, ctxWithSpan
 	}
-	return trLog, ctx
+	return traceLogger, ctx
 }
 
 func spanFromMetadataOrNew(openTracingContext, msg string) (Tracer, context.Context) {
@@ -171,7 +184,7 @@ func spanFromMetadataOrNew(openTracingContext, msg string) (Tracer, context.Cont
 func IssueTrace(aceMsg *rpc.Message, eventMsg string) context.Context {
 	trace, ctxWithSpan := spanFromMetadataOrNew(aceMsg.GetOpentracingContext(), eventMsg)
 
-	trace.LogStringField("event", eventMsg)
+	trace.LogStringField(logging.LogFieldEvent, eventMsg)
 	traceIds(trace, aceMsg)
 	trace.Finish()
 
@@ -180,10 +193,10 @@ func IssueTrace(aceMsg *rpc.Message, eventMsg string) context.Context {
 
 // IssueErrorTrace -
 func IssueErrorTrace(aceMsg *rpc.Message, err error, eventMsg string) context.Context {
-	trace, ctxWithSpan := spanFromMetadataOrNew(aceMsg.GetOpentracingContext(), "error")
+	trace, ctxWithSpan := spanFromMetadataOrNew(aceMsg.GetOpentracingContext(), "Error")
 
-	trace.LogErrorField("error", err)
-	trace.LogStringField("error-info", eventMsg)
+	trace.LogErrorField(logging.LogFieldError, err)
+	trace.LogStringField(logging.LogFieldErrorInfo, eventMsg)
 	traceIds(trace, aceMsg)
 	trace.Finish()
 
@@ -191,10 +204,12 @@ func IssueErrorTrace(aceMsg *rpc.Message, err error, eventMsg string) context.Co
 }
 
 func traceIds(trace Tracer, aceMsg *rpc.Message) {
-	trace.LogStringField("ChoreographyId", aceMsg.GetCHN_UUID())
-	trace.LogStringField("ChoreographyExecutionId", aceMsg.GetCHX_UUID())
-	trace.LogStringField("message.UUID", aceMsg.GetUUID())
-	trace.LogStringField("message.Parent_UUID", aceMsg.GetParent_UUID())
+	trace.LogStringField(logging.LogFieldChoreographyID, aceMsg.GetCHN_UUID())
+	trace.LogStringField(logging.LogFieldExecutionID, aceMsg.GetCHX_UUID())
+	trace.LogStringField(logging.LogFieldMessageID, aceMsg.GetUUID())
+	trace.LogStringField(logging.LogFieldParentMessageID, aceMsg.GetParent_UUID())
+	trace.LogIntField(logging.LogFieldSequenceTerm, int(aceMsg.GetSequenceTerm()))
+	trace.LogIntField(logging.LogFieldSequenceUpperBound, int(aceMsg.GetSequenceUpperBound()))
 }
 
 // TraceLogging -
@@ -231,11 +246,14 @@ type TraceSpan struct {
 // PLEASE NOTE: uses INFO level, since it corresponds the closest to the purpose of opentracing
 type TraceLog struct {
 	logger *zap.Logger
+	msg    string
+	fields []zap.Field
 }
 
 // Finish - TraceSpan implementation of Tracer interface
 func (s TraceSpan) Finish() {
 	s.otSpan.Finish()
+	s.traceLog.Finish()
 }
 
 // LogStringField -
@@ -264,29 +282,33 @@ func (s TraceSpan) LogErrorField(key string, value error) {
 }
 
 // LogStringField - TraceLog implementation of Tracer interface method
-func (l TraceLog) LogStringField(key, value string) {
-	l.logger.Info("tracing",
-		zap.String(key, value),
-	)
+func (l *TraceLog) LogStringField(key, value string) {
+	field := zap.String(key, value)
+	l.fields = append(l.fields, field)
 }
 
 // LogIntField is TraceLog implementation of Tracer interface
-func (l TraceLog) LogIntField(key string, value int) {
-	l.logger.Info("tracing",
-		zap.Int(key, value),
-	)
+func (l *TraceLog) LogIntField(key string, value int) {
+	field := zap.Int(key, value)
+	l.fields = append(l.fields, field)
 }
 
 // LogErrorField is TraceLog implementation of Tracer interface
-func (l TraceLog) LogErrorField(key string, value error) {
-	l.logger.Error("tracing",
-		zap.Error(value),
-	)
+func (l *TraceLog) LogErrorField(key string, value error) {
+	field := zap.String(key, value.Error())
+	l.fields = append(l.fields, field)
 }
 
 // Finish - in case of TraceLog implementation, there is nothing to do
-func (l TraceLog) Finish() {
-	//noop
+func (l *TraceLog) Finish() {
+	if len(l.fields) > 0 {
+		l.logger.Info(l.msg,
+			l.fields...,
+		)
+	} else {
+		l.logger.Info(l.msg)
+	}
+	l.fields = nil
 }
 
 type noopCloser struct {

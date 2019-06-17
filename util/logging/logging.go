@@ -21,13 +21,13 @@ func init() {
 	//
 	rawJSON := []byte(`{
 			"level": "debug",
-			"encoding": "console",
+			"encoding": "json",
 			"outputPaths": ["stdout"],
 			"errorOutputPaths": ["stderr"],
 			"encoderConfig": {
 			  "messageKey": "msg",
 			  "levelKey": "level",
-			  "levelEncoder": "lowercase",
+			  "levelEncoder": "capital",
 			  "timeKey": "time",
 			  "timeEncoder": "iso8601"
 			}
@@ -48,8 +48,6 @@ func init() {
 		logLevel := aToLogLevel(logLevelStr, zapcore.DebugLevel)
 		cfg.Level.SetLevel(logLevel)
 	}
-
-	logger.Debug("logger construction succeeded")
 
 	if err != nil {
 		fmt.Printf("error: %v\n", err)
