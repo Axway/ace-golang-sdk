@@ -1,0 +1,26 @@
+#!groovy
+pipeline {
+    agent {
+        docker {
+            image 'ace.swf-artifactory.lab.phx.axway.int/ace/ubuntu-fortify:latest'
+        }
+    }
+
+    parameters {
+        /* Parameter specifications below are generic, they are shared by all microservices of a same deployment */
+    }
+    stages {
+        stage('ACE Golang SDK gosec') {
+            steps {
+                sh '''
+                    mkdir -p $GOPATH/src/github.com/Axway
+                    cd $GOPATH/src/github.com/Axway
+                    ln -s ${WORKSPACE} ace-golang-sdk
+                    cd $GOPATH/src/github.com/Axway/ace-golang-sdk
+                    dep ensure -v
+                    gosec -severity medium -fmt=json -out=gosec-results.json ./...
+                '''
+            }
+        }
+    }
+}
