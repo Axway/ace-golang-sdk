@@ -2,7 +2,7 @@
 pipeline {
     agent {
         docker {
-            image 'ace.swf-artifactory.lab.phx.axway.int/ace/ubuntu-fortify:latest'
+            image 'ace.swf-artifactory.lab.phx.axway.int/ace/ubuntu-security:latest'
         }
     }
 
