@@ -14,7 +14,6 @@ pipeline {
                     cd $GOPATH/src/github.com/Axway
                     ln -s ${WORKSPACE} ace-golang-sdk
                     cd $GOPATH/src/github.com/Axway/ace-golang-sdk
-                    dep ensure -v
                     gosec -severity medium -fmt=json -out=gosec-results.json ./...
                 '''
             }
