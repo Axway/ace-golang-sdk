@@ -29,6 +29,7 @@ pipeline {
                     cd $GOPATH/src/github.com/Axway
                     ln -s ${WORKSPACE} ace-golang-sdk
                     cd $GOPATH/src/github.com/Axway/ace-golang-sdk
+                    dep ensure -v
                     go test -v -short -coverpkg=./... -coverprofile=$GOPATH/src/github.com/Axway/ace-golang-sdk/gocoverage.out -count=1 ./...
                     sonar-scanner -X \
                         -Dsonar.host.url=${SONAR_URL} \
