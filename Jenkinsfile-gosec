@@ -6,9 +6,6 @@ pipeline {
         }
     }
 
-    parameters {
-        /* Parameter specifications below are generic, they are shared by all microservices of a same deployment */
-    }
     stages {
         stage('ACE Golang SDK gosec') {
             steps {
