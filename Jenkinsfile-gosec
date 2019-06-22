@@ -10,7 +10,6 @@ pipeline {
         stage('ACE Golang SDK gosec') {
             steps {
                 sh '''
-                    mkdir -p $GOPATH/src/github.com/Axway
                     cd $GOPATH/src/github.com/Axway
                     ln -s ${WORKSPACE} ace-golang-sdk
                     cd $GOPATH/src/github.com/Axway/ace-golang-sdk
