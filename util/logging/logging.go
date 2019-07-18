@@ -25,13 +25,13 @@ func init() {
 			"outputPaths": ["stdout"],
 			"errorOutputPaths": ["stderr"],
 			"encoderConfig": {
-			  "messageKey": "msg",
-			  "levelKey": "level",
-			  "levelEncoder": "capital",
-			  "timeKey": "time",
-			  "timeEncoder": "iso8601"
+				"messageKey": "msg",
+				"levelKey": "level",
+				"levelEncoder": "capital",
+				"timeKey": "@timestamp",
+				"timeEncoder": "iso8601"
 			}
-		  }`)
+		}`)
 
 	var cfg zap.Config
 	if err = json.Unmarshal(rawJSON, &cfg); err != nil {
