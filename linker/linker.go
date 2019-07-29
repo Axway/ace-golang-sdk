@@ -102,13 +102,13 @@ func AddIntConfigParam(name string, defaultValue int, required bool) error {
 
 // AddBooleanConfigParam - Add boolean config parameter for the service
 func AddBooleanConfigParam(name string, defaultValue bool) error {
-	intConfigParam := &rpc.ConfigParameter{
+	boolConfigParam := &rpc.ConfigParameter{
 		Name:         name,
 		Type:         "boolean",
 		DefaultValue: strconv.FormatBool(defaultValue),
 		IsRequired:   true,
 	}
-	addConfigParam(intConfigParam)
+	addConfigParam(boolConfigParam)
 	return nil
 }
 
