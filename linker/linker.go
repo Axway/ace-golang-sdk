@@ -3,6 +3,7 @@ package linker
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"go.uber.org/zap"
 
@@ -60,6 +61,7 @@ type Link struct {
 var link *Link
 var traceLogging tracing.TraceLogging
 var log = logging.Logger()
+var serviceConfigParamTemplates []*rpc.ConfigParameter
 
 // MsgProducer - what is exposed to client business function
 type MsgProducer interface {
@@ -68,6 +70,47 @@ type MsgProducer interface {
 
 // BusinessMessageProcessor type of 'business' function used to process paylod relayed to Linker
 type BusinessMessageProcessor func(context.Context, []*messaging.BusinessMessage, MsgProducer) error
+
+// Add config parameter to list
+func addConfigParam(configParam *rpc.ConfigParameter) {
+	serviceConfigParamTemplates = append(serviceConfigParamTemplates, configParam)
+}
+
+// AddStringConfigParam - Add String config parameter for the service
+func AddStringConfigParam(name, defaultValue string, required bool) error {
+	stringConfigParam := &rpc.ConfigParameter{
+		Name:         name,
+		Type:         "string",
+		DefaultValue: defaultValue,
+		IsRequired:   required,
+	}
+	addConfigParam(stringConfigParam)
+	return nil
+}
+
+// AddIntConfigParam - Add integer config parameter for the service
+func AddIntConfigParam(name string, defaultValue int, required bool) error {
+	intConfigParam := &rpc.ConfigParameter{
+		Name:         name,
+		Type:         "int",
+		DefaultValue: strconv.Itoa(defaultValue),
+		IsRequired:   required,
+	}
+	addConfigParam(intConfigParam)
+	return nil
+}
+
+// AddBooleanConfigParam - Add boolean config parameter for the service
+func AddBooleanConfigParam(name string, defaultValue bool) error {
+	boolConfigParam := &rpc.ConfigParameter{
+		Name:         name,
+		Type:         "boolean",
+		DefaultValue: strconv.FormatBool(defaultValue),
+		IsRequired:   true,
+	}
+	addConfigParam(boolConfigParam)
+	return nil
+}
 
 // Register -Registers the business service with linker
 func Register(name, version, description, serviceType string, fn BusinessMessageProcessor) (*Link, error) {
@@ -167,7 +210,6 @@ func (link Link) OnRelay(aceMessage *rpc.Message) {
 		panic(fmt.Sprintf("MsgProcessor of %s agent is not of expected BusinessMessageProcessor type, actual: %T\n",
 			link.name, msgProcessor))
 	}
-
 }
 
 // OnSidecarRegistrationComplete can perform Linker-specific post registration actions
@@ -238,12 +280,13 @@ func (link Link) onRelayComplete(msg *rpc.Message) {
 
 func (link Link) registerWithSidecar() (bool, error) {
 	serviceInfo := rpc.ServiceInfo{
-		ServiceName:        link.name,
-		ServiceVersion:     link.version,
-		ServiceDescription: link.description,
-		ServiceType:        rpc.ServiceInfo_ServiceType(rpc.ServiceInfo_ServiceType_value[link.serviceType]),
-		ServiceHost:        link.cfg.ServerHost,
-		ServicePort:        uint32(link.cfg.ServerPort),
+		ServiceName:           link.name,
+		ServiceVersion:        link.version,
+		ServiceDescription:    link.description,
+		ServiceType:           rpc.ServiceInfo_ServiceType(rpc.ServiceInfo_ServiceType_value[link.serviceType]),
+		ServiceHost:           link.cfg.ServerHost,
+		ServicePort:           uint32(link.cfg.ServerPort),
+		ServiceConfigTemplate: serviceConfigParamTemplates,
 	}
 
 	log.Info("Registering with sidecar",

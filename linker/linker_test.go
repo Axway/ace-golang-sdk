@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"testing"
 
 	"github.com/Axway/ace-golang-sdk/linker/rpcclient"
@@ -44,6 +45,74 @@ func TestRegister(t *testing.T) {
 	}
 	if link.description != testDescription {
 		t.Errorf("incorrect description, expected %s got %s", testDescription, link.description)
+	}
+}
+
+func TestAddParams(t *testing.T) {
+	AddStringConfigParam("string", "default", false)
+
+	if len(serviceConfigParamTemplates) != 1 {
+		t.Errorf("incorrect number of parameters, expected %s got %s", "1", strconv.Itoa(len(serviceConfigParamTemplates)))
+	}
+
+	if serviceConfigParamTemplates[0].GetType() != "string" {
+		t.Errorf("incorrect type of string parameter, expected %s got %s", "string", serviceConfigParamTemplates[0].GetType())
+	}
+
+	if serviceConfigParamTemplates[0].GetName() != "string" {
+		t.Errorf("incorrect name of string parameter, expected %s got %s", "string", serviceConfigParamTemplates[0].GetName())
+	}
+
+	if serviceConfigParamTemplates[0].GetDefaultValue() != "default" {
+		t.Errorf("incorrect default value of string parameter, expected %s got %s", "default", serviceConfigParamTemplates[0].GetDefaultValue())
+	}
+
+	if serviceConfigParamTemplates[0].GetIsRequired() != false {
+		t.Errorf("incorrect IsRequired of string parameter, expected %s got %s", "false", strconv.FormatBool(serviceConfigParamTemplates[0].GetIsRequired()))
+	}
+
+	AddIntConfigParam("integer", 123, true)
+
+	if len(serviceConfigParamTemplates) != 2 {
+		t.Errorf("incorrect number of parameters, expected %s got %s", "2", strconv.Itoa(len(serviceConfigParamTemplates)))
+	}
+
+	if serviceConfigParamTemplates[1].GetType() != "int" {
+		t.Errorf("incorrect type of integer parameter, expected %s got %s", "int", serviceConfigParamTemplates[1].GetType())
+	}
+
+	if serviceConfigParamTemplates[1].GetName() != "integer" {
+		t.Errorf("incorrect name of integer parameter, expected %s got %s", "integer", serviceConfigParamTemplates[1].GetName())
+	}
+
+	if serviceConfigParamTemplates[1].GetDefaultValue() != "123" {
+		t.Errorf("incorrect default value of integer parameter, expected %s got %s", "123", serviceConfigParamTemplates[1].GetDefaultValue())
+	}
+
+	if serviceConfigParamTemplates[1].GetIsRequired() != true {
+		t.Errorf("incorrect IsRequired of integer parameter, expected %s got %s", "true", strconv.FormatBool(serviceConfigParamTemplates[1].GetIsRequired()))
+	}
+
+	AddBooleanConfigParam("boolean", false)
+
+	if len(serviceConfigParamTemplates) != 3 {
+		t.Errorf("incorrect number of parameters, expected %s got %s", "3", strconv.Itoa(len(serviceConfigParamTemplates)))
+	}
+
+	if serviceConfigParamTemplates[2].GetType() != "boolean" {
+		t.Errorf("incorrect type of boolean parameter, expected %s got %s", "boolean", serviceConfigParamTemplates[2].GetType())
+	}
+
+	if serviceConfigParamTemplates[2].GetName() != "boolean" {
+		t.Errorf("incorrect name of boolean parameter, expected %s got %s", "boolean", serviceConfigParamTemplates[2].GetName())
+	}
+
+	if serviceConfigParamTemplates[2].GetDefaultValue() != "false" {
+		t.Errorf("incorrect default value of boolean parameter, expected %s got %s", "false", serviceConfigParamTemplates[2].GetDefaultValue())
+	}
+
+	if serviceConfigParamTemplates[2].GetIsRequired() != true {
+		t.Errorf("incorrect IsRequired of boolean parameter, expected %s got %s", "true", strconv.FormatBool(serviceConfigParamTemplates[2].GetIsRequired()))
 	}
 }
 
