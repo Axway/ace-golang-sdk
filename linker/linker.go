@@ -76,8 +76,21 @@ func addConfigParam(configParam *rpc.ConfigParameter) {
 	serviceConfigParamTemplates = append(serviceConfigParamTemplates, configParam)
 }
 
+func checkDuplicateConfigParam(name string) error {
+	for _, cfgParam := range serviceConfigParamTemplates {
+		if cfgParam.Name == name {
+			return fmt.Errorf("Duplicate definition for config parameter : %s", name)
+		}
+	}
+	return nil
+}
+
 // AddStringConfigParam - Add String config parameter for the service
 func AddStringConfigParam(name, defaultValue string, required bool) error {
+	err := checkDuplicateConfigParam(name)
+	if err != nil {
+		return err
+	}
 	stringConfigParam := &rpc.ConfigParameter{
 		Name:         name,
 		Type:         "string",
@@ -90,6 +103,10 @@ func AddStringConfigParam(name, defaultValue string, required bool) error {
 
 // AddIntConfigParam - Add integer config parameter for the service
 func AddIntConfigParam(name string, defaultValue int, required bool) error {
+	err := checkDuplicateConfigParam(name)
+	if err != nil {
+		return err
+	}
 	intConfigParam := &rpc.ConfigParameter{
 		Name:         name,
 		Type:         "int",
@@ -102,6 +119,10 @@ func AddIntConfigParam(name string, defaultValue int, required bool) error {
 
 // AddBooleanConfigParam - Add boolean config parameter for the service
 func AddBooleanConfigParam(name string, defaultValue bool) error {
+	err := checkDuplicateConfigParam(name)
+	if err != nil {
+		return err
+	}
 	boolConfigParam := &rpc.ConfigParameter{
 		Name:         name,
 		Type:         "boolean",
