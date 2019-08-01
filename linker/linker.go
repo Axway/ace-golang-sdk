@@ -69,7 +69,7 @@ type MsgProducer interface {
 }
 
 // BusinessMessageProcessor type of 'business' function used to process paylod relayed to Linker
-type BusinessMessageProcessor func(context.Context, []*messaging.BusinessMessage, MsgProducer) error
+type BusinessMessageProcessor func(ExecutionContext) error
 
 // Add config parameter to list
 func addConfigParam(configParam *rpc.ConfigParameter) {
@@ -190,29 +190,43 @@ var (
 func (link Link) OnRelay(aceMessage *rpc.Message) {
 	ctxWithSpan := tracing.IssueTrace(aceMessage, "Agent message receive")
 
-	switch msgProcessor := link.MsgProcessor.(type) {
-	case BusinessMessageProcessor:
-		clientRelay, buildErr := link.client.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
-		if buildErr != nil {
-			log.Fatal("Unable to initialize relay client", zap.String(logging.LogFieldError, buildErr.Error()))
-			return
-		}
-		log.Debug("Relay client created, executing service callback to process message",
+	clientRelay, buildErr := link.client.BuildClientRelay(ctxWithSpan, aceMessage, sidecarHost, sidecarPort)
+	if buildErr != nil {
+		log.Fatal("Unable to initialize relay client", zap.String(logging.LogFieldError, buildErr.Error()))
+		return
+	}
+	log.Debug("Relay client created, executing service callback to process message",
+		zap.String(logging.LogFieldChoreographyID, aceMessage.GetCHN_UUID()),
+		zap.String(logging.LogFieldExecutionID, aceMessage.GetCHX_UUID()),
+		zap.String(logging.LogFieldMessageID, aceMessage.GetUUID()),
+		zap.String(logging.LogFieldParentMessageID, aceMessage.GetParent_UUID()))
+
+	defer func() {
+		log.Info("Service callback execution completed",
 			zap.String(logging.LogFieldChoreographyID, aceMessage.GetCHN_UUID()),
 			zap.String(logging.LogFieldExecutionID, aceMessage.GetCHX_UUID()),
 			zap.String(logging.LogFieldMessageID, aceMessage.GetUUID()),
 			zap.String(logging.LogFieldParentMessageID, aceMessage.GetParent_UUID()))
+		clientRelay.CloseSend()
+	}()
 
-		defer func() {
-			log.Info("Service callback execution completed",
-				zap.String(logging.LogFieldChoreographyID, aceMessage.GetCHN_UUID()),
-				zap.String(logging.LogFieldExecutionID, aceMessage.GetCHX_UUID()),
-				zap.String(logging.LogFieldMessageID, aceMessage.GetUUID()),
-				zap.String(logging.LogFieldParentMessageID, aceMessage.GetParent_UUID()))
-			clientRelay.CloseSend()
-		}()
+	step := aceMessage.GetPattern()
+	var configMap = make(map[string]*rpc.ConfigParameter)
+	for _, configParam := range step.ServiceConfig {
+		configMap[configParam.Name] = configParam
+	}
 
-		err := msgProcessor(ctxWithSpan, aceMessage.GetBusinessMessage(), clientRelay)
+	switch msgProcessor := link.MsgProcessor.(type) {
+	case BusinessMessageProcessor:
+
+		msgContext := messageContext{
+			ctx:              ctxWithSpan,
+			businessMessages: aceMessage.GetBusinessMessage(),
+			msgProducer:      clientRelay,
+			configMap:        configMap,
+		}
+		err := msgProcessor(&msgContext)
+
 		if err != nil {
 			tracing.IssueErrorTrace(
 				aceMessage,

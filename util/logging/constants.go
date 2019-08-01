@@ -32,4 +32,8 @@ const (
 	LogFieldAgentHost   = "agentHost"
 	LogFieldAgentPort   = "agentPort"
 	LogFieldSidecarID   = "sidecarId"
+
+	LogConfigParamName          = "configName"
+	LogConfigParamType          = "configType"
+	LogConfigParamTypeRequested = "configTypeRequested"
 )
