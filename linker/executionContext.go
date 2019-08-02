@@ -48,14 +48,14 @@ func (msgCtx *messageContext) GetMsgProducer() MsgProducer {
 func (msgCtx *messageContext) GetStringConfig(name string) string {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
-		log.Warn("The requested configuration did not exist, returning default for type",
+		log.Warn("The requested configuration did not exist, returning default for type string",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamTypeRequested, "string"))
 		return ""
 	}
 
 	if cfgParam.GetType() != "string" {
-		log.Warn("The requested configuration is not of type string, returning default for type",
+		log.Warn("The requested configuration is not correct type, returning default for type string",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
 			zap.String(logging.LogConfigParamTypeRequested, "string"))
@@ -69,14 +69,14 @@ func (msgCtx *messageContext) GetStringConfig(name string) string {
 func (msgCtx *messageContext) GetIntConfig(name string) int {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
-		log.Warn("The requested configuration did not exist, returning default for type",
+		log.Warn("The requested configuration did not exist, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
 		return 0
 	}
 
 	if cfgParam.GetType() != "int" {
-		log.Warn("The requested configuration is not of type int, returning default for type",
+		log.Warn("The requested configuration is not correct type, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
 			zap.String(logging.LogConfigParamTypeRequested, "int"))
@@ -85,7 +85,7 @@ func (msgCtx *messageContext) GetIntConfig(name string) int {
 
 	intVal, err := strconv.Atoi(cfgParam.GetValue())
 	if err != nil {
-		log.Warn("Could not parse the config value to an int, returning default for type",
+		log.Warn("Could not parse the config value to an int, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
 			zap.String(logging.LogConfigParamTypeRequested, "int"))
@@ -98,14 +98,14 @@ func (msgCtx *messageContext) GetIntConfig(name string) int {
 func (msgCtx *messageContext) GetBooleanConfig(name string) bool {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
-		log.Warn("The requested configuration did not exist, returning default for type",
+		log.Warn("The requested configuration did not exist, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
 		return false
 	}
 
 	if cfgParam.GetType() != "boolean" {
-		log.Warn("The requested configuration is not of type boolean, returning default for type",
+		log.Warn("The requested configuration is not correct type, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
 			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
@@ -114,7 +114,7 @@ func (msgCtx *messageContext) GetBooleanConfig(name string) bool {
 
 	boolVal, err := strconv.ParseBool(cfgParam.GetValue())
 	if err != nil {
-		log.Warn("Could not parse the config value to a boolean, returning default for type",
+		log.Warn("Could not parse the config value to a boolean, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
 			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
