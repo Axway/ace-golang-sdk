@@ -25,31 +25,31 @@ ctx := executionContext.GetSpanContext();
 Get the Business Message list
 
 ```
-businessMsgs = executionContext.GetBusinessMessages();
+businessMsgs := executionContext.GetBusinessMessages();
 ```
 
 Get the Message Producer Function
 
 ```
-msgProducer = executionContext.GetMsgProducer();
+msgProducer := executionContext.GetMsgProducer();
 ```
 
 Get a String Config Value
 
 ```
-stringParamNameValue = executionContext.GetStringConfig('stringParamName');
+stringParamNameValue := executionContext.GetStringConfig("stringParamName");
 ```
 
 Get an Int Config Value
 
 ```
-intParamNameValue = executionContext.GetIntConfig('intParamName');
+intParamNameValue := executionContext.GetIntConfig("intParamName");
 ```
 
 Get a Boolean Config Value
 
 ```
-boolParamNameValue = executionContext.GetBooleanConfig('boolParamName');
+boolParamNameValue := executionContext.GetBooleanConfig("boolParamName");
 ```
 
 ### Input processing
@@ -167,7 +167,7 @@ The service registration needs following details
 
 -   Service Name
 -   Service Version
--       Service Type
+-   Service Type
     -   NATIVE
     -   AGGREGATION
 -   Service Description
