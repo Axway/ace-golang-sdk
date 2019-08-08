@@ -37,19 +37,19 @@ msgProducer := executionContext.GetMsgProducer();
 Get a String Config Value
 
 ```
-stringParamNameValue := executionContext.GetStringConfig("stringParamName");
+stringParamNameValue := executionContext.GetStringConfigValue("stringParamName");
 ```
 
 Get an Int Config Value
 
 ```
-intParamNameValue := executionContext.GetIntConfig("intParamName");
+intParamNameValue := executionContext.GetIntConfigValue("intParamName");
 ```
 
 Get a Boolean Config Value
 
 ```
-boolParamNameValue := executionContext.GetBooleanConfig("boolParamName");
+boolParamNameValue := executionContext.GetBooleanConfigValue("boolParamName");
 ```
 
 ### Input processing

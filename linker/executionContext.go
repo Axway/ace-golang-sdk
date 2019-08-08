@@ -24,9 +24,9 @@ type ExecutionContext interface {
 	GetSpanContext() context.Context
 	GetBusinessMessages() []*messaging.BusinessMessage
 	GetMsgProducer() MsgProducer
-	GetStringConfig(string) string
-	GetIntConfig(string) int
-	GetBooleanConfig(string) bool
+	GetStringConfigValue(string) string
+	GetIntConfigValue(string) int
+	GetBooleanConfigValue(string) bool
 }
 
 // GetSpanContext - Returns the current context
@@ -44,8 +44,8 @@ func (msgCtx *messageContext) GetMsgProducer() MsgProducer {
 	return msgCtx.msgProducer
 }
 
-// GetStringConfig - Returns the string confign value
-func (msgCtx *messageContext) GetStringConfig(name string) string {
+// GetStringConfigValue - Returns the string confign value
+func (msgCtx *messageContext) GetStringConfigValue(name string) string {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type string",
@@ -65,8 +65,8 @@ func (msgCtx *messageContext) GetStringConfig(name string) string {
 	return cfgParam.GetValue()
 }
 
-// GetIntConfig - Returns the int config value
-func (msgCtx *messageContext) GetIntConfig(name string) int {
+// GetIntConfigValue - Returns the int config value
+func (msgCtx *messageContext) GetIntConfigValue(name string) int {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type int",
@@ -94,8 +94,8 @@ func (msgCtx *messageContext) GetIntConfig(name string) int {
 	return intVal
 }
 
-// GetBooleanConfig - Returns the boolean config value
-func (msgCtx *messageContext) GetBooleanConfig(name string) bool {
+// GetBooleanConfigValue - Returns the boolean config value
+func (msgCtx *messageContext) GetBooleanConfigValue(name string) bool {
 	cfgParam, ok := msgCtx.configMap[name]
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type boolean",
