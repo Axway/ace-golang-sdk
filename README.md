@@ -11,12 +11,50 @@ ACE SDK allows developers to implement microservices that can be used as executa
 Implement the callback method that will process the received message. Below is the signature of the method
 
 ```
-func businessMessageProcessor(ctx context.Context, businessMsg *messaging.BusinessMessage, msgProducer linker.MsgProducer) error
+func businessMessageProcessor(executionContext linker.ExecutionContext) error
+```
+
+### Execution Context
+
+Get the Open Tracing Span Context
+
+```
+ctx := executionContext.GetSpanContext();
+```
+
+Get the Business Message list
+
+```
+businessMsgs := executionContext.GetBusinessMessages();
+```
+
+Get the Message Producer Function
+
+```
+msgProducer := executionContext.GetMsgProducer();
+```
+
+Get a String Config Value
+
+```
+stringParamNameValue := executionContext.GetStringConfigValue("stringParamName");
+```
+
+Get an Int Config Value
+
+```
+intParamNameValue := executionContext.GetIntConfigValue("intParamName");
+```
+
+Get a Boolean Config Value
+
+```
+boolParamNameValue := executionContext.GetBooleanConfigValue("boolParamName");
 ```
 
 ### Input processing
 
-The businessMsg parameter of type messaging.BusinessMessage identifies the business message and holds the payload and the metadata associated with the payload.
+The businessMsgs is an array of type messaging.BusinessMessage. Each identify a business message and holds the payload and the metadata associated with the payload.
 
 #### Processing payload
 
@@ -82,6 +120,24 @@ span.LogFields(opentractingLog.String("event", "processed message"))
 span.Finish()
 ```
 
+## Add log lines (Optional)
+
+ACE SDK sets up a log object that can be used by the service to add additional logging to the console. Using the provided logger will write the lines consistent with the ACE SDK.
+
+A call to the log method and level will include a message and additional fields provided with zap logger calls. The SDK provides field names that may be used.
+
+```
+import "github.com/Axway/ace-golang-sdk/util/logging"
+var log = logging.Logger()
+
+log.Debug("Business service config",
+    zap.String(logging.LogFieldServiceName, cfg.ServiceName),
+    zap.String(logging.LogFieldServiceVersion, cfg.ServiceVersion),
+    zap.String(logging.LogFieldServiceType, cfg.ServiceType),
+    zap.String(logging.LogFieldServiceDesc, cfg.ServiceDescription),
+)
+```
+
 ## Handling errors in the service execution
 
 ACE SDK had three error types defined.
@@ -111,6 +167,9 @@ The service registration needs following details
 
 -   Service Name
 -   Service Version
+-   Service Type
+    -   NATIVE
+    -   AGGREGATION
 -   Service Description
 -   Callback method
 

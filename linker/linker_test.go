@@ -16,8 +16,8 @@ import (
 
 var testProcBusMsg *messaging.BusinessMessage
 
-func testProc(c context.Context, bm []*messaging.BusinessMessage, mp MsgProducer) error {
-	testProcBusMsg = bm[0]
+func testProc(ec ExecutionContext) error {
+	testProcBusMsg = ec.GetBusinessMessages()[0]
 	return nil
 }
 
@@ -243,8 +243,8 @@ func TestOnRelayNoErrors(t *testing.T) {
 	}
 }
 
-func testProcReturnProcessingError(c context.Context, bm []*messaging.BusinessMessage, mp MsgProducer) error {
-	testProcBusMsg = bm[0]
+func testProcReturnProcessingError(ec ExecutionContext) error {
+	testProcBusMsg = ec.GetBusinessMessages()[0]
 	return NewProcessingError(errors.New("test-processing-error"))
 }
 func TestOnRelayProcessingError(t *testing.T) {
