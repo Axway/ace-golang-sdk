@@ -11,6 +11,12 @@ import (
 	"github.com/Axway/ace-golang-sdk/rpc"
 )
 
+const (
+	stringType = "string"
+	intType    = "int"
+	boolType   = "boolean"
+)
+
 // messageContext - Represents the current execution context that holds the message and related properties
 type messageContext struct {
 	ctx              context.Context
@@ -50,7 +56,7 @@ func (msgCtx *messageContext) GetStringConfigValue(name string) string {
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type string",
 			zap.String(logging.LogConfigParamName, name),
-			zap.String(logging.LogConfigParamTypeRequested, "string"))
+			zap.String(logging.LogConfigParamTypeRequested, stringType))
 		return ""
 	}
 
@@ -58,7 +64,7 @@ func (msgCtx *messageContext) GetStringConfigValue(name string) string {
 		log.Warn("The requested configuration is not correct type, returning default for type string",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
-			zap.String(logging.LogConfigParamTypeRequested, "string"))
+			zap.String(logging.LogConfigParamTypeRequested, stringType))
 		return ""
 	}
 
@@ -71,7 +77,7 @@ func (msgCtx *messageContext) GetIntConfigValue(name string) int {
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
-			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
+			zap.String(logging.LogConfigParamTypeRequested, boolType))
 		return 0
 	}
 
@@ -79,7 +85,7 @@ func (msgCtx *messageContext) GetIntConfigValue(name string) int {
 		log.Warn("The requested configuration is not correct type, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
-			zap.String(logging.LogConfigParamTypeRequested, "int"))
+			zap.String(logging.LogConfigParamTypeRequested, intType))
 		return 0
 	}
 
@@ -88,7 +94,7 @@ func (msgCtx *messageContext) GetIntConfigValue(name string) int {
 		log.Warn("Could not parse the config value to an int, returning default for type int",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
-			zap.String(logging.LogConfigParamTypeRequested, "int"))
+			zap.String(logging.LogConfigParamTypeRequested, intType))
 		return 0
 	}
 	return intVal
@@ -100,7 +106,7 @@ func (msgCtx *messageContext) GetBooleanConfigValue(name string) bool {
 	if !ok {
 		log.Warn("The requested configuration did not exist, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
-			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
+			zap.String(logging.LogConfigParamTypeRequested, boolType))
 		return false
 	}
 
@@ -108,7 +114,7 @@ func (msgCtx *messageContext) GetBooleanConfigValue(name string) bool {
 		log.Warn("The requested configuration is not correct type, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
-			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
+			zap.String(logging.LogConfigParamTypeRequested, boolType))
 		return false
 	}
 
@@ -117,7 +123,7 @@ func (msgCtx *messageContext) GetBooleanConfigValue(name string) bool {
 		log.Warn("Could not parse the config value to a boolean, returning default for type boolean",
 			zap.String(logging.LogConfigParamName, name),
 			zap.String(logging.LogConfigParamType, cfgParam.GetType()),
-			zap.String(logging.LogConfigParamTypeRequested, "boolean"))
+			zap.String(logging.LogConfigParamTypeRequested, boolType))
 		return false
 	}
 	return boolVal
