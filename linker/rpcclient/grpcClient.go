@@ -329,6 +329,7 @@ func buildResult(parentMsg *rpc.Message, bm *messaging.BusinessMessage) *rpc.Mes
 }
 
 func copyPattern(target *rpc.StepPattern, source *rpc.StepPattern) {
+	target.Id = source.GetId()
 	target.ServiceName = source.GetServiceName()
 	target.ServiceVersion = source.GetServiceVersion()
 	target.Validation = source.GetValidation()
